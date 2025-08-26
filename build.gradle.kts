@@ -35,6 +35,14 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
 
+	// Redis
+	implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
+	// Validation
+	implementation("org.springframework.boot:spring-boot-starter-validation")
+
+	implementation("org.apache.commons:commons-lang3:3.14.0")
+
     // DB
 	runtimeOnly("com.mysql:mysql-connector-j")
 
@@ -43,6 +51,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.testcontainers:junit-jupiter")
 	testImplementation("org.testcontainers:mysql")
+	testImplementation("org.testcontainers:redis")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
