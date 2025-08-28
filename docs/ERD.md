@@ -3,7 +3,7 @@
 ---
 
 ## 📌 ERD 다이어그램
-![ERD](./docs/images/ERD.png)
+![ERD](../docs/images/ERD.png)
 
 ---
 
