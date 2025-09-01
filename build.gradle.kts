@@ -31,28 +31,29 @@ dependencyManagement {
 
 dependencies {
     // Spring
-	implementation("org.springframework.boot:spring-boot-starter-actuator")
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-	implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation ("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation ("org.springframework.boot:spring-boot-starter-validation")
+    implementation ("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.apache.commons:commons-lang3:3.14.0")
 
-	// Redis
-	implementation("org.springframework.boot:spring-boot-starter-data-redis")
-
-	// Validation
-	implementation("org.springframework.boot:spring-boot-starter-validation")
-
-	implementation("org.apache.commons:commons-lang3:3.14.0")
+    runtimeOnly ("com.mysql:mysql-connector-j")
+    testImplementation ("org.springframework.boot:spring-boot-starter-test")
 
     // DB
 	runtimeOnly("com.mysql:mysql-connector-j")
 
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-	testImplementation("org.springframework.boot:spring-boot-testcontainers")
-	testImplementation("org.testcontainers:junit-jupiter")
-	testImplementation("org.testcontainers:mysql")
-	testImplementation("org.testcontainers:redis")
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation ("org.mockito:mockito-junit-jupiter:5.11.0")
+    testImplementation ("org.assertj:assertj-core:3.26.0")
+
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:mysql")
+    testImplementation("org.testcontainers:redis")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.withType<Test> {
