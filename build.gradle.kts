@@ -56,6 +56,12 @@ dependencies {
     testImplementation("org.testcontainers:mysql")
     testImplementation("org.testcontainers:redis")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    compileOnly("org.projectlombok:lombok:1.18.34")
+    annotationProcessor("org.projectlombok:lombok:1.18.34")
+
+    testCompileOnly("org.projectlombok:lombok:1.18.34")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.34")
 }
 
 tasks.withType<Test> {
