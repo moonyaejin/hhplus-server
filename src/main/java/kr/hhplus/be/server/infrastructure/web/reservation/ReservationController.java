@@ -1,7 +1,7 @@
-package kr.hhplus.be.server.reservation.adapter.web;
+package kr.hhplus.be.server.infrastructure.web.reservation;
 
-import kr.hhplus.be.server.reservation.port.in.ConfirmPaymentUseCase;
-import kr.hhplus.be.server.reservation.port.in.HoldSeatUseCase;
+import kr.hhplus.be.server.application.usecase.reservation.ConfirmPaymentUseCase;
+import kr.hhplus.be.server.application.usecase.reservation.HoldSeatUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 

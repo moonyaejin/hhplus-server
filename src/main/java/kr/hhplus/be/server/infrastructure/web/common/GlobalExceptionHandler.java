@@ -1,5 +1,6 @@
-package kr.hhplus.be.server.reservation.adapter.web;
+package kr.hhplus.be.server.infrastructure.web.common;
 
+import kr.hhplus.be.server.domain.reservation.model.exception.*;
 import kr.hhplus.be.server.reservation.domain.exception.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;

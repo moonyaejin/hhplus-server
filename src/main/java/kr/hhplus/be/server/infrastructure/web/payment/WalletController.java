@@ -1,6 +1,10 @@
-package kr.hhplus.be.server.wallet;
+package kr.hhplus.be.server.infrastructure.web.payment;
 
 import jakarta.transaction.Transactional;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.UserWallet;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletRepository;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.WalletLedger;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.WalletLedgerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
