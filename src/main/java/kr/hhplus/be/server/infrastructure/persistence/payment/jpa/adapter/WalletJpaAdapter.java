@@ -1,8 +1,12 @@
-package kr.hhplus.be.server.wallet;
+package kr.hhplus.be.server.infrastructure.persistence.payment.jpa.adapter;
 
 import jakarta.transaction.Transactional;
-import kr.hhplus.be.server.reservation.domain.exception.InsufficientBalance;
-import kr.hhplus.be.server.reservation.port.out.WalletPort;
+import kr.hhplus.be.server.domain.reservation.model.exception.InsufficientBalance;
+import kr.hhplus.be.server.application.port.out.WalletPort;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.UserWallet;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.WalletLedger;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletRepository;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.WalletLedgerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

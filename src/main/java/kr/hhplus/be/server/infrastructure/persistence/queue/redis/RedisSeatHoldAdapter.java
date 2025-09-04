@@ -1,6 +1,6 @@
-package kr.hhplus.be.server.reservation.adapter.redis;
+package kr.hhplus.be.server.infrastructure.persistence.queue.redis;
 
-import kr.hhplus.be.server.reservation.port.out.SeatHoldPort;
+import kr.hhplus.be.server.application.port.out.SeatHoldPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
