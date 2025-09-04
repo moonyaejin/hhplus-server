@@ -1,10 +1,9 @@
-package kr.hhplus.be.server.wallet;
+package kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -14,14 +13,18 @@ import java.util.UUID;
 public class UserWallet {
 
     @Id
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "user_id", columnDefinition = "BINARY(16)")
     private UUID userId;
 
     @Column(name = "balance", nullable = false)
     private Long balance;
 
+    @Version
+    private long version;
+
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at", nullable = false, updatable = true)
     private Instant updatedAt;
 
     protected UserWallet() {}
@@ -36,6 +39,7 @@ public class UserWallet {
     public UUID getUserId() { return userId; }
     public Long getBalance() { return balance; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public long getVersion() { return version; }
 
     // 충전
     public void increase(long amount) {

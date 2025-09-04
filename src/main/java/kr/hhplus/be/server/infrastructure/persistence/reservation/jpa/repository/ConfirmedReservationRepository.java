@@ -1,6 +1,7 @@
-package kr.hhplus.be.server.reservation.adapter.persistence;
+package kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository;
 
 import io.lettuce.core.dynamic.annotation.Param;
+import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.entity.ConfirmedReservationJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -11,6 +12,6 @@ public interface ConfirmedReservationRepository extends JpaRepository<ConfirmedR
 
     boolean existsByConcertDateAndSeatNo(LocalDate concertDate, Integer seatNo);
 
-    @Query("select c.seatNo from ConfirmedReservationJpaEntity c where c.concertDate = :date")
+    @Query("select r.seatNo from ConfirmedReservationJpaEntity r where r.concertDate = :date")
     List<Integer> findSeatNosByConcertDate(@Param("date") LocalDate date);
 }

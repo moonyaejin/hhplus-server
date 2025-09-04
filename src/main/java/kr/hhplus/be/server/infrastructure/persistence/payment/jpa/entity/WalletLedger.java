@@ -1,7 +1,9 @@
-package kr.hhplus.be.server.wallet;
+package kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,11 +20,12 @@ public class WalletLedger {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JdbcTypeCode(SqlTypes.BINARY)
     @Column(name = "user_id", columnDefinition = "BINARY(16)", nullable = false)
     private UUID userId;
 
     @Column(name = "amount", nullable = false)
-    private Long amount; // 충전:+, 결제:-, 환불:+
+    private long amount; // 충전:+, 결제:-, 환불:+
 
     @Column(name = "reason", nullable = false, length = 32)
     private String reason; // CHARGE / PAYMENT / REFUND
@@ -31,7 +34,7 @@ public class WalletLedger {
     private String idempotencyKey;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     protected WalletLedger() {}
@@ -44,4 +47,9 @@ public class WalletLedger {
     }
 
     public Long getId() { return id; }
+    public UUID getUserId() { return userId; }
+    public long getAmount() { return amount; }
+    public String getReason() { return reason; }
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public Instant getCreatedAt() { return createdAt; }
 }
