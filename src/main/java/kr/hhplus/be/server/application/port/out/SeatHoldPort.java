@@ -1,4 +1,4 @@
-package kr.hhplus.be.server.reservation.port.out;
+package kr.hhplus.be.server.application.port.out;
 
 import java.time.LocalDate;
 
