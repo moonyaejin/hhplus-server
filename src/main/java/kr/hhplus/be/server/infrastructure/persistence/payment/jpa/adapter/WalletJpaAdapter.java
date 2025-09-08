@@ -24,23 +24,48 @@ public class WalletJpaAdapter implements WalletPort {
     public long pay(String userId, long amount, String idempotencyKey) {
         UUID uid = UUID.fromString(userId);
 
-        // 멱등성 체크 (이미 처리된 요청이면 현재 잔액만 반환)
+        // 멱등성 체크
         if (idempotencyKey != null && ledgerRepo.existsByUserIdAndIdempotencyKey(uid, idempotencyKey)) {
-            return walletRepo.findById(uid)
-                    .map(UserWallet::getBalance)
-                    .orElseThrow(() -> new IllegalStateException("wallet not fount"));
+            return balanceOf(userId);
         }
 
         UserWallet wallet = walletRepo.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("wallet not found"));
 
         if (wallet.getBalance() < amount) {
-            throw new InsufficientBalance();
+            throw new IllegalArgumentException("insufficient balance");
         }
 
         wallet.decrease(amount);
 
         ledgerRepo.save(new WalletLedger(uid, -amount, "PAYMENT", idempotencyKey));
         return wallet.getBalance();
+    }
+
+    @Transactional
+    @Override
+    public long topUp(String userId, long amount, String idempotencyKey) {
+        UUID uid = UUID.fromString(userId);
+
+        // 멱등성 체크
+        if (idempotencyKey != null && ledgerRepo.existsByUserIdAndIdempotencyKey(uid, idempotencyKey)) {
+            return balanceOf(userId);
+        }
+
+        UserWallet wallet = walletRepo.findById(uid)
+                .orElseThrow(() -> new IllegalStateException("wallet not found"));
+
+        wallet.increase(amount);
+
+        ledgerRepo.save(new WalletLedger(uid, amount, "TOP_UP", idempotencyKey));
+        return wallet.getBalance();
+    }
+
+    @Override
+    public long balanceOf(String userId) {
+        UUID uid = UUID.fromString(userId);
+        return walletRepo.findById(uid)
+                .map(UserWallet::getBalance)
+                .orElseThrow(() -> new IllegalStateException("wallet not found"));
     }
 }

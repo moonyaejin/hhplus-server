@@ -17,7 +17,7 @@ public class ConcertController {
     @GetMapping
     public List<Map<String,Object>> list() {
         return concerts.listConcerts().stream()
-                .map(c -> Map.of("id", c.getId(), "title", c.getTitle()))
+                .map(c -> Map.<String, Object>of("id", c.getId(), "title", c.getTitle()))
                 .toList();
     }
 
@@ -26,4 +26,3 @@ public class ConcertController {
         return concerts.listAvailableSeats(id, LocalDate.parse(date));
     }
 }
-

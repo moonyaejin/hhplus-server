@@ -1,42 +1,41 @@
 package kr.hhplus.be.server.infrastructure.web.payment;
 
-import jakarta.transaction.Transactional;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.UserWallet;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletRepository;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.WalletLedger;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.WalletLedgerRepository;
+import kr.hhplus.be.server.application.port.out.WalletPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-import java.util.UUID;
-
-@RestController @RequestMapping("/wallets")
+@RestController
+@RequestMapping("/api/wallets")
 @RequiredArgsConstructor
 public class WalletController {
-    private final UserWalletRepository userWalletRepository;
-    private final WalletLedgerRepository walletLedgerRepository;
 
+    private final WalletPort wallet;
+
+    // 잔액조회
     @GetMapping("/{userId}")
-    public Map<String, Object> balance(@PathVariable UUID userId) {
-        long balance = userWalletRepository.findById(userId).map(UserWallet::getBalance).orElse(0L);
-        return Map.of("userId", userId, "balance", balance);
+    public BalanceResponse balance(@PathVariable String userId) {
+        return new BalanceResponse(wallet.balanceOf(userId));
     }
 
-    @PostMapping("/{userId}/charge")
-    @Transactional
-    public Map<String, Object> charge(@PathVariable UUID userId,
-                                      @RequestParam long amount,
-                                      @RequestHeader(value="Idempotency-Key", required = false) String idem) {
-        // 멱등 처리
-        if (idem != null && walletLedgerRepository.existsByUserIdAndIdempotencyKey(userId, idem)) {
-            long balance = userWalletRepository.findById(userId).map(UserWallet::getBalance).orElseThrow();
-            return Map.of("balance", balance);
-        }
-        UserWallet w = userWalletRepository.findForUpdate(userId).orElseGet(() -> new UserWallet(userId, 0));
-        w.increase(amount);
-        userWalletRepository.save(w);
-        walletLedgerRepository.save(new WalletLedger(userId, amount, "CHARGE", idem));
-        return Map.of("balance", w.getBalance());
+    // 충전
+    @PostMapping("/{userId}/top-up")
+    public BalanceResponse topUp(@PathVariable String userId,
+                                 @RequestParam long amount,
+                                 @RequestParam String idempotencyKey) {
+        if (amount <= 0) throw new IllegalArgumentException("amount must be greater than zero");
+        long newBalance = wallet.topUp(userId, amount, idempotencyKey);
+        return new BalanceResponse(newBalance);
     }
+
+    // 결제
+    @PostMapping("/{userId}/pay")
+    public BalanceResponse pay(@PathVariable String userId,
+                               @RequestParam long amount,
+                               @RequestParam String idempotencyKey) {
+        if (amount <= 0) throw new IllegalArgumentException("amount must be greater than zero");
+        long newBalance = wallet.pay(userId, amount, idempotencyKey);
+        return new BalanceResponse(newBalance);
+    }
+
+    public record BalanceResponse(long balance) {}
 }
