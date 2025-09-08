@@ -1,4 +1,4 @@
-package kr.hhplus.be.server.infrastructure.web.common;
+package kr.hhplus.be.server.web.common;
 
 import kr.hhplus.be.server.domain.reservation.model.exception.*;
 import kr.hhplus.be.server.domain.reservation.model.exception.*;
