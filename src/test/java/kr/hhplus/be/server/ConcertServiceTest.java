@@ -5,8 +5,8 @@ import kr.hhplus.be.server.domain.concert.Concert;
 import kr.hhplus.be.server.domain.concert.ConcertRepository;
 import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.entity.ConcertJpaEntity;
 import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.entity.ConcertScheduleJpaEntity;
-import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleRepository;
-import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationRepository;
+import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleJpaRepository;
+import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,15 +21,15 @@ import static org.mockito.Mockito.*;
 class ConcertServiceTest {
 
     private ConcertRepository concertRepository;
-    private ConcertScheduleRepository scheduleRepository;
-    private ConfirmedReservationRepository confirmedReservationRepository;
+    private ConcertScheduleJpaRepository scheduleRepository;
+    private ConfirmedReservationJpaRepository confirmedReservationRepository;
     private ConcertService concertService;
 
     @BeforeEach
     void setUp() {
         concertRepository = mock(ConcertRepository.class);
-        scheduleRepository = mock(ConcertScheduleRepository.class);
-        confirmedReservationRepository = mock(ConfirmedReservationRepository.class);
+        scheduleRepository = mock(ConcertScheduleJpaRepository.class);
+        confirmedReservationRepository = mock(ConfirmedReservationJpaRepository.class);
         concertService = new ConcertService(concertRepository, scheduleRepository, confirmedReservationRepository);
     }
 

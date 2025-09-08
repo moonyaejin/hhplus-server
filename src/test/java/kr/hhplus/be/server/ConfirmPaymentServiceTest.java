@@ -4,7 +4,7 @@ import kr.hhplus.be.server.application.usecase.reservation.ConfirmPaymentService
 import kr.hhplus.be.server.domain.reservation.model.exception.HoldNotFoundOrExpired;
 import kr.hhplus.be.server.domain.reservation.model.exception.InsufficientBalance;
 import kr.hhplus.be.server.domain.reservation.model.exception.SeatAlreadyConfirmed;
-import kr.hhplus.be.server.application.usecase.reservation.ConfirmPaymentUseCase;
+import kr.hhplus.be.server.application.port.in.ConfirmPaymentUseCase;
 import kr.hhplus.be.server.application.port.out.ConfirmedReservationPort;
 import kr.hhplus.be.server.application.port.out.QueuePort;
 import kr.hhplus.be.server.application.port.out.SeatHoldPort;

@@ -2,7 +2,7 @@ package kr.hhplus.be.server;
 
 import kr.hhplus.be.server.application.port.out.QueuePort;
 import kr.hhplus.be.server.application.usecase.queue.QueueService;
-import kr.hhplus.be.server.application.usecase.queue.QueueUseCase;
+import kr.hhplus.be.server.application.port.in.QueueUseCase;
 import kr.hhplus.be.server.domain.queue.model.QueueToken;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

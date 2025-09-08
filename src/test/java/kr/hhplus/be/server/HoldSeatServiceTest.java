@@ -3,7 +3,7 @@ package kr.hhplus.be.server;
 import kr.hhplus.be.server.application.usecase.reservation.HoldSeatService;
 import kr.hhplus.be.server.domain.reservation.model.exception.SeatAlreadyConfirmed;
 import kr.hhplus.be.server.domain.reservation.model.exception.SeatAlreadyHeld;
-import kr.hhplus.be.server.application.usecase.reservation.HoldSeatUseCase;
+import kr.hhplus.be.server.application.port.in.HoldSeatUseCase;
 import kr.hhplus.be.server.application.port.out.ConfirmedReservationPort;
 import kr.hhplus.be.server.application.port.out.QueuePort;
 import kr.hhplus.be.server.application.port.out.SeatHoldPort;

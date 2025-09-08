@@ -1,7 +1,7 @@
 package kr.hhplus.be.server.application.query;
 
-import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleRepository;
-import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationRepository;
+import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleJpaRepository;
+import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,8 +14,8 @@ import java.util.*;
 @RequiredArgsConstructor
 public class SeatQueryService {
 
-    private final ConfirmedReservationRepository confirmedRepo;
-    private final ConcertScheduleRepository scheduleRepo;
+    private final ConfirmedReservationJpaRepository confirmedRepo;
+    private final ConcertScheduleJpaRepository scheduleRepo;
     private final StringRedisTemplate redis;
 
     /** 좌석 현황 조회: 확정/홀드(남은 TTL)/가용 */
