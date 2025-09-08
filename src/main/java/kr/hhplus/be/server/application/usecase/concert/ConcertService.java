@@ -1,9 +1,10 @@
 package kr.hhplus.be.server.application.usecase.concert;
 
+import kr.hhplus.be.server.application.port.in.ConcertUseCase;
 import kr.hhplus.be.server.domain.concert.Concert;
 import kr.hhplus.be.server.domain.concert.ConcertRepository;
-import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleRepository;
-import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationRepository;
+import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleJpaRepository;
+import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,8 +18,8 @@ import java.util.stream.IntStream;
 public class ConcertService implements ConcertUseCase {
 
     private final ConcertRepository concerts;              // 도메인 포트
-    private final ConcertScheduleRepository schedules;
-    private final ConfirmedReservationRepository confirmed;// 확정 좌석 조회
+    private final ConcertScheduleJpaRepository schedules;
+    private final ConfirmedReservationJpaRepository confirmed;// 확정 좌석 조회
 
     @Override
     public List<Concert> listConcerts() {

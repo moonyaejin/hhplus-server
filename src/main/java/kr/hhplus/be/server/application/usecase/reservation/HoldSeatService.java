@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.application.usecase.reservation;
 
+import kr.hhplus.be.server.application.port.in.HoldSeatUseCase;
 import kr.hhplus.be.server.domain.reservation.model.exception.ForbiddenQueueAccess;
 import kr.hhplus.be.server.domain.reservation.model.exception.SeatAlreadyConfirmed;
 import kr.hhplus.be.server.domain.reservation.model.exception.SeatAlreadyHeld;

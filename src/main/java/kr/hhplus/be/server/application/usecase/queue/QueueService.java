@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.application.usecase.queue;
 
+import kr.hhplus.be.server.application.port.in.QueueUseCase;
 import kr.hhplus.be.server.application.port.out.QueuePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
