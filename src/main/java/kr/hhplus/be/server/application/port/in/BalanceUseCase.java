@@ -1,4 +1,4 @@
-package kr.hhplus.be.server.application.usecase.balance;
+package kr.hhplus.be.server.application.port.in;
 
 public interface BalanceUseCase {
     BalanceResult balanceOf(String userId);

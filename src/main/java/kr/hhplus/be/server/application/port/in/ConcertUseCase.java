@@ -1,4 +1,4 @@
-package kr.hhplus.be.server.application.usecase.concert;
+package kr.hhplus.be.server.application.port.in;
 
 import kr.hhplus.be.server.domain.concert.Concert;
 

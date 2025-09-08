@@ -1,4 +1,4 @@
-package kr.hhplus.be.server.application.usecase.reservation;
+package kr.hhplus.be.server.application.port.in;
 
 import java.time.Instant;
 import java.time.LocalDate;
