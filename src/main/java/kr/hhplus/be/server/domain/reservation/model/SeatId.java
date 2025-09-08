@@ -3,26 +3,29 @@ package kr.hhplus.be.server.domain.reservation.model;
 import java.time.LocalDate;
 import java.util.Objects;
 
-public record SeatId {
-        private final LocalDate date;
-        private final int seatNo;
+public record SeatId(LocalDate date, int seatNo) {
 
-    public SeatId(LocalDate date, int seatNo) {
+    // compact constructor (필드 검증만 가능)
+    public SeatId {
         if (date == null) throw new IllegalArgumentException("date cannot be null");
-        if (seatNo <= 0) throw new IllegalArgumentException("seatNo must be positive");
-        this.date = date;
-        this.seatNo = seatNo;
+        if (seatNo <= 0) throw new IllegalArgumentException("seatNo must be greater than zero");
     }
 
-    public LocalDate getDate() { return date; }
-    public int seatNo() { return seatNo; }
-
-    @Override public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof SeatId)) return false;
-        return seatNo == s.seatNo && date.equals(s.date);
+    // equals / hashCode / toString은 record가 자동 생성
+    @Override
+    public boolean equals(Object o) {
+        return (o instanceof SeatId s) &&
+                this.seatNo == s.seatNo &&
+                this.date.equals(s.date);
     }
 
-    @Override public int hashCode() { return Objects.hash(date, seatNo); }
-    @Override public String toString() { return "%s#%d".formatted(date, seatNo); }
+    @Override
+    public int hashCode() {
+        return Objects.hash(date, seatNo);
+    }
+
+    @Override
+    public String toString() {
+        return "%s#%d".formatted(date, seatNo);
+    }
 }

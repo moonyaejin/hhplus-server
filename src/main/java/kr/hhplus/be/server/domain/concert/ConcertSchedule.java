@@ -10,7 +10,7 @@ public class ConcertSchedule {
 
     public ConcertSchedule(Long id, Long concertId, LocalDate concertDate, int seatCount) {
         if (concertDate == null) throw new IllegalArgumentException("concertDate cannot be null");
-        if (seatCount <= 0) throw new IllegalArgumentException("seatCount must be positive");
+        if (seatCount <= 0) throw new IllegalArgumentException("seatCount must be greater than zero");
 
         this.id = id;
         this.concertId = concertId;
