@@ -8,6 +8,7 @@ import kr.hhplus.be.server.application.port.out.ConfirmedReservationPort;
 import kr.hhplus.be.server.application.port.out.QueuePort;
 import kr.hhplus.be.server.application.port.out.SeatHoldPort;
 
+import kr.hhplus.be.server.domain.reservation.service.ReservationPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,10 +44,10 @@ class HoldSeatServiceTest {
         // when
         var r = sut.hold(cmd);
 
-        // then: 가격은 80,000원으로 계산되며 성공
+        // then: seatNo=10 이므로 가격은 110,000원이어야 함
         assertThat(r.success()).isTrue();
-        assertThat(r.price()).isEqualTo(80_000L);
-        verify(hold).tryHold(date, 10, "user-1", 300);
+        assertThat(r.price()).isEqualTo(110_000L);
+        verify(hold).tryHold(eq(date), eq(10), eq("user-1"), eq(ReservationPolicy.HOLD_SECONDS));
     }
 
     @Test
