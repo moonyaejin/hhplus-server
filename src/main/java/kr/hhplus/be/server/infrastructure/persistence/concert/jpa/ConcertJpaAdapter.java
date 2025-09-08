@@ -3,7 +3,6 @@ package kr.hhplus.be.server.infrastructure.persistence.concert.jpa;
 import kr.hhplus.be.server.domain.concert.Concert;
 import kr.hhplus.be.server.domain.concert.ConcertRepository;
 import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.entity.ConcertJpaEntity;
-import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.SpringDataConcertJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -12,9 +11,9 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class ConcertRepositoryJpa implements ConcertRepository {
+public class ConcertJpaAdapter implements ConcertRepository {
 
-    private final SpringDataConcertJpaRepository repo; // extends JpaRepository<ConcertJpaEntity, Long>
+    private final kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertJpaRepository repo; // extends JpaRepository<ConcertJpaEntity, Long>
 
     @Override
     public Optional<Concert> findById(Long id) {

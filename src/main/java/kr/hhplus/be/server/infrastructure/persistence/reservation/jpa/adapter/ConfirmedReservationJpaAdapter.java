@@ -3,7 +3,7 @@ package kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.adapter;
 // 도메인에서 정의한 출력 포트(ConfirmedReservationPort)를 구현해서 JPA Repository를 감싸는 역할
 
 import kr.hhplus.be.server.application.port.out.ConfirmedReservationPort;
-import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationRepository;
+import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationJpaRepository;
 import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.entity.ConfirmedReservationJpaEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,9 +14,9 @@ import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
-public class ConfirmedReservationAdapter implements ConfirmedReservationPort {
+public class ConfirmedReservationJpaAdapter implements ConfirmedReservationPort {
 
-    private final ConfirmedReservationRepository repository;
+    private final ConfirmedReservationJpaRepository repository;
 
     @Override
     public boolean exists(LocalDate date, int seatNo) {

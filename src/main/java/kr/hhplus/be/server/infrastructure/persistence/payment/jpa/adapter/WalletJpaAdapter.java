@@ -2,10 +2,10 @@ package kr.hhplus.be.server.infrastructure.persistence.payment.jpa.adapter;
 
 import jakarta.transaction.Transactional;
 import kr.hhplus.be.server.application.port.out.WalletPort;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.UserWallet;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.WalletLedger;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletRepository;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.WalletLedgerRepository;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.UserWalletJpaEntity;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.WalletLedgerJpaEntity;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletJpaRepository;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.WalletLedgerJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -17,8 +17,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WalletJpaAdapter implements WalletPort {
 
-    private final UserWalletRepository walletRepo;
-    private final WalletLedgerRepository ledgerRepo;
+    private final UserWalletJpaRepository walletRepo;
+    private final WalletLedgerJpaRepository ledgerRepo;
 
     @Transactional
     @Override
@@ -31,7 +31,7 @@ public class WalletJpaAdapter implements WalletPort {
             return balanceOf(userId);
         }
 
-        UserWallet entity = walletRepo.findById(uid)
+        UserWalletJpaEntity entity = walletRepo.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("wallet not found"));
 
         // 도메인 객체로 변환
@@ -41,7 +41,7 @@ public class WalletJpaAdapter implements WalletPort {
         // 변경 반영
         entity.setBalance(wallet.balance());
 
-        ledgerRepo.save(new WalletLedger(uid, -amount, "PAYMENT", idempotencyKey));
+        ledgerRepo.save(new WalletLedgerJpaEntity(uid, -amount, "PAYMENT", idempotencyKey));
         return entity.getBalance();
     }
 
@@ -56,7 +56,7 @@ public class WalletJpaAdapter implements WalletPort {
             return balanceOf(userId);
         }
 
-        UserWallet entity = walletRepo.findById(uid)
+        UserWalletJpaEntity entity = walletRepo.findById(uid)
                 .orElseThrow(() -> new IllegalStateException("wallet not found"));
 
         var wallet = new kr.hhplus.be.server.application.usecase.payment.Wallet(entity.getUserId(), entity.getBalance());
@@ -64,7 +64,7 @@ public class WalletJpaAdapter implements WalletPort {
 
         entity.setBalance(wallet.balance());
 
-        ledgerRepo.save(new WalletLedger(uid, amount, "TOP_UP", idempotencyKey));
+        ledgerRepo.save(new WalletLedgerJpaEntity(uid, amount, "TOP_UP", idempotencyKey));
         return entity.getBalance();
     }
 
@@ -72,7 +72,7 @@ public class WalletJpaAdapter implements WalletPort {
     public long balanceOf(String userId) {
         UUID uid = UUID.fromString(userId);
         return walletRepo.findById(uid)
-                .map(UserWallet::getBalance)
+                .map(UserWalletJpaEntity::getBalance)
                 .orElseThrow(() -> new IllegalStateException("wallet not found"));
     }
 }

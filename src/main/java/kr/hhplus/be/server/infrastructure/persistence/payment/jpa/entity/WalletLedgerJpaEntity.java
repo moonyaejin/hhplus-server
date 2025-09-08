@@ -14,7 +14,7 @@ import java.util.UUID;
                 name = "uq_wallet_idem",
                 columnNames = {"user_id", "idempotency_key"}
         ))
-public class WalletLedger {
+public class WalletLedgerJpaEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,9 +37,9 @@ public class WalletLedger {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    protected WalletLedger() {}
+    protected WalletLedgerJpaEntity() {}
 
-    public WalletLedger(UUID userId, long amount, String reason, String idempotencyKey) {
+    public WalletLedgerJpaEntity(UUID userId, long amount, String reason, String idempotencyKey) {
         this.userId = userId;
         this.amount = amount;
         this.reason = reason;

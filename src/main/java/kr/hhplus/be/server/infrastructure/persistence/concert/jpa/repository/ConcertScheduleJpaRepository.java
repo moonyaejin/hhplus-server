@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.LocalDate;
 import java.util.Optional;
 
-public interface ConcertScheduleRepository extends JpaRepository<ConcertScheduleJpaEntity, Long> {
+public interface ConcertScheduleJpaRepository extends JpaRepository<ConcertScheduleJpaEntity, Long> {
     Optional<ConcertScheduleJpaEntity> findByConcertIdAndConcertDate(Long concertId, LocalDate date);
 }

@@ -8,7 +8,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
 
-public interface ConfirmedReservationRepository extends JpaRepository<ConfirmedReservationJpaEntity, Long> {
+public interface ConfirmedReservationJpaRepository extends JpaRepository<ConfirmedReservationJpaEntity, Long> {
 
     boolean existsByConcertDateAndSeatNo(LocalDate concertDate, Integer seatNo);
 

@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "user_wallet")
-public class UserWallet {
+public class UserWalletJpaEntity {
 
     @Id
     @JdbcTypeCode(SqlTypes.BINARY)
@@ -27,9 +27,9 @@ public class UserWallet {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected UserWallet() {}
+    protected UserWalletJpaEntity() {}
 
-    public UserWallet(UUID userId, long initialBalance) {
+    public UserWalletJpaEntity(UUID userId, long initialBalance) {
         this.userId = userId;
         this.balance = initialBalance;
     }

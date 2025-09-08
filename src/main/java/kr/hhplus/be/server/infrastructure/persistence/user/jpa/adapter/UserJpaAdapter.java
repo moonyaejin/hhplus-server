@@ -4,7 +4,7 @@ import kr.hhplus.be.server.domain.user.UserRepository;
 import kr.hhplus.be.server.domain.user.model.User;
 import kr.hhplus.be.server.domain.user.model.UserId;
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.entity.UserJpaEntity;
-import kr.hhplus.be.server.infrastructure.persistence.user.jpa.repository.SpringDataUserRepository;
+import kr.hhplus.be.server.infrastructure.persistence.user.jpa.repository.UserJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -13,9 +13,9 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class UserRepositoryJpaAdapter implements UserRepository {
+public class UserJpaAdapter implements UserRepository {
 
-    private final SpringDataUserRepository repo;
+    private final UserJpaRepository repo;
 
     @Override
     public Optional<User> findById(UserId id) {
