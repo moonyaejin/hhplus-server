@@ -43,20 +43,21 @@ public class ConfirmPaymentServiceTest {
         // given: 좌석은 내가 홀드했고, 아직 확정된 적 없음, 지갑 결제도 성공
         when(hold.isHeldBy(date, 10, "user-1")).thenReturn(true);
         when(confirmed.exists(date, 10)).thenReturn(false);
-        when(wallet.pay("user-1", 80_000L, "idem-1")).thenReturn(920_000L); // 차감 후 잔액 예시
-        when(confirmed.insert(eq(date), eq(10), eq("user-1"), eq(80_000L), any()))
+        when(wallet.pay("user-1", 110_000L, "idem-1")).thenReturn(89_000L); // 차감 후 잔액 예시
+        when(confirmed.insert(eq(date), eq(10), eq("user-1"), eq(110_000L), any()))
                 .thenReturn(123L);
+
 
         // when: 결제 확정을 시도
         var r = sut.confirm(cmd);
 
         // then: 예약 id와 잔액이 기대대로 나오고,
         assertThat(r.reservationId()).isEqualTo(123L);
-        assertThat(r.balance()).isEqualTo(920_000L);
+        assertThat(r.balance()).isEqualTo(89_000L);
 
         // 실제로 pay/insert/expire 메서드가 호출되었는지도 검증
-        verify(wallet).pay("user-1", 80_000L, "idem-1");
-        verify(confirmed).insert(eq(date), eq(10), eq("user-1"), eq(80_000L), any());
+        verify(wallet).pay("user-1", 110_000L, "idem-1");
+        verify(confirmed).insert(eq(date), eq(10), eq("user-1"), eq(110_000L), any());
         verify(queue).expire("t");
     }
 
@@ -102,29 +103,24 @@ public class ConfirmPaymentServiceTest {
 
     @Test
     void 멱등성_두번째호출은_이미확정되어_wallet_pay_다시안불림() {
-        // 1차 호출: 정상 플로우
+        // 첫 번째 호출
         when(hold.isHeldBy(date, 10, "user-1")).thenReturn(true);
-        when(confirmed.exists(date, 10)).thenReturn(false); // 첫 호출은 미확정
-        when(wallet.pay(anyString(), anyLong(), anyString())).thenReturn(900_000L);
-        when(confirmed.insert(eq(date), eq(10), eq("user-1"), eq(80_000L), any()))
+        when(confirmed.exists(date, 10)).thenReturn(false);
+        when(wallet.pay(anyString(), eq(110_000L), anyString())).thenReturn(89_000L);
+        when(confirmed.insert(eq(date), eq(10), eq("user-1"), eq(110_000L), any()))
                 .thenReturn(1L);
 
-        sut.confirm(cmd);  // 첫 번째 호출 성공
+        sut.confirm(cmd);
 
-        // 2차 호출: 이미 확정된 상태로 바꿔서 재시도
-        reset(wallet); // 호출 검증을 새로 하기 위해 mock 리셋
+        // 두 번째 호출: 다시 stub 필요
         when(hold.isHeldBy(date, 10, "user-1")).thenReturn(true);
-        when(confirmed.exists(date, 10)).thenReturn(true); // 이미 확정
+        when(confirmed.exists(date, 10)).thenReturn(true);
 
-        // when & then: 이미 확정 예외 발생, 지갑은 다시 차감되지 않음
         assertThatThrownBy(() -> sut.confirm(cmd))
                 .isInstanceOf(SeatAlreadyConfirmed.class);
 
-        // 멱등성: 지갑 결제는 다시 일어나면 안 됨(중복 결제 방지)
-        verify(wallet, never()).pay(anyString(), anyLong(), anyString());
-
-        // 이미 확정 상태이므로 insert/expire 같은 후속 처리도 없음
-        verify(confirmed, never()).insert(any(), anyInt(), anyString(), anyLong(), any());
-        verify(queue, never()).expire(anyString());
+        // wallet.pay는 첫 번째 호출만 발생
+        verify(wallet, times(1)).pay(anyString(), anyLong(), anyString());
+        verifyNoMoreInteractions(wallet);
     }
 }

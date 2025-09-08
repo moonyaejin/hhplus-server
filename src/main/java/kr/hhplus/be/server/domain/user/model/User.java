@@ -9,8 +9,8 @@ public class User {
     private final Instant createdAt;
 
     public User(UserId id, String name, Instant createdAt) {
-        if (id == null) throw new IllegalArgumentException("id");
-        if (name == null || name.isBlank()) throw new IllegalArgumentException("name");
+        if (id == null) throw new IllegalArgumentException("id cannot be null");
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("name cannot be null or blank");
         this.id = id;
         this.name = name;
         this.createdAt = createdAt == null ? Instant.now() : createdAt;
@@ -21,7 +21,7 @@ public class User {
     public Instant createdAt() { return createdAt; }
 
     public void rename(String newName) {
-        if (newName == null || newName.isBlank()) throw new IllegalArgumentException("newName");
+        if (newName == null || newName.isBlank()) throw new IllegalArgumentException("newName cannot be null or blank");
         this.name = newName;
     }
 }

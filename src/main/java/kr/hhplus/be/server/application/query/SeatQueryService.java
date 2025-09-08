@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -30,23 +29,22 @@ public class SeatQueryService {
         Set<Integer> confirmed = new HashSet<>(confirmedRepo.findSeatNosByConcertDate(date));
 
         // 3) Redis 키 준비 (확정 제외한 좌석들만 TTL 확인)
-        List<Integer> toCheck = new ArrayList<>(seatCount);
         List<String> keys = new ArrayList<>(seatCount);
         for (int n = 1; n <= seatCount; n++) {
             if (!confirmed.contains(n)) {
-                toCheck.add(n);
                 keys.add(redisKey(date, n)); // hold:{date}:{seatNo}
             }
         }
 
         // 4) 파이프라인으로 TTL 일괄 조회 (ms 단위)
         @SuppressWarnings("unchecked")
-        List<Long> pttls = (List<Long>) redis.executePipelined((connection) -> {
-            for (String k : keys) {
-                connection.keyCommands().pTtl(k.getBytes()); // PTTL
-            }
-            return null;
-        });
+        List<Object> pttlsRaw = redis.executePipelined(
+                (org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+                    for (String k : keys) {
+                        connection.pTtl(k.getBytes());
+                    }
+                    return null;
+                });
 
         // 5) 결과 조립
         List<SeatView> list = new ArrayList<>(seatCount);
@@ -55,7 +53,9 @@ public class SeatQueryService {
             if (confirmed.contains(n)) {
                 list.add(new SeatView(n, SeatStatus.CONFIRMED, null));
             } else {
-                Long pttl = (pttls != null && idx < pttls.size()) ? pttls.get(idx++) : null;
+                Long pttl = (pttlsRaw != null && idx < pttlsRaw.size())
+                        ? (Long) pttlsRaw.get(idx++) // 강제 캐스팅
+                        : null;
                 if (pttl != null && pttl > 0) {
                     list.add(new SeatView(n, SeatStatus.HELD, pttl / 1000)); // ms → s
                 } else {
@@ -63,14 +63,16 @@ public class SeatQueryService {
                 }
             }
         }
-        return list;
+        return list; // seats() 메서드 반환 추가
     }
 
     /** 간단한 정책: 오늘부터 days일 */
     public List<LocalDate> availableDates(int days) {
         List<LocalDate> dates = new ArrayList<>(days);
         LocalDate d = LocalDate.now();
-        for (int i = 0; i < days; i++) dates.add(d.plusDays(i));
+        for (int i = 0; i < days; i++) {
+            dates.add(d.plusDays(i));
+        }
         return dates;
     }
 

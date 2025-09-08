@@ -12,7 +12,7 @@ public class Wallet {
 
     public Wallet(UUID userId, long balance) {
         if (userId == null) throw new IllegalArgumentException("userId");
-        if (balance < 0) throw new IllegalArgumentException("balance must be >= 0");
+        if (balance < 0) throw new IllegalArgumentException("must not be negative");
         this.userId = userId;
         this.balance = balance;
     }
@@ -22,13 +22,13 @@ public class Wallet {
 
     // 충전
     public void charge(long amount) {
-        if (amount <= 0) throw new IllegalArgumentException("amount must be > 0");
+        if (amount <= 0) throw new IllegalArgumentException("amount must be greater than zero");
         this.balance += amount;
     }
 
     // 결제
     public void pay(long amount) {
-        if (amount <= 0) throw new IllegalArgumentException("amount must be > 0");
+        if (amount <= 0) throw new IllegalArgumentException("amount must be greater than zero");
         long next = this.balance - amount;
         if (next < 0) throw new InsufficientBalance();
         this.balance = next;

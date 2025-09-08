@@ -34,14 +34,14 @@ public class HoldSeatService implements HoldSeatUseCase {
         // 이미 확정 좌석이면 실패
         if (confirmed.exists(cmd.date(), cmd.seatNo())) throw new SeatAlreadyConfirmed();
 
-        // 홀드 시도
+        // 가격 계산
+        final long price = ReservationPolicy.priceOf(cmd.date(), cmd.seatNo());
+
+        // 좌석 홀드 (ttlSec 넘기기)
         final boolean ok = hold.tryHold(cmd.date(), cmd.seatNo(), userId, ReservationPolicy.HOLD_SECONDS);
         if (!ok) throw new SeatAlreadyHeld();
 
-        // 가격은 정책에서 계산
-        final long price = ReservationPolicy.priceOf(cmd.date(), cmd.seatNo());
-
-        // 만료 시각은 now + TTL
+        // 만료 시간 계산
         final Instant now = Instant.now(clock);
         final Instant expiresAt = now.plusSeconds(ReservationPolicy.HOLD_SECONDS);
 

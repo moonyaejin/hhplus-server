@@ -43,15 +43,15 @@ public class UserWallet {
 
     // 충전
     public void increase(long amount) {
-        if (amount < 0) throw new IllegalArgumentException("amount cannot be negative");
+        if (amount <= 0) throw new IllegalArgumentException("amount must be greater than zero");
         this.balance += amount;
     }
 
     // 결제 차감
     public void decrease(long amount) {
-        if (amount < 0) throw new IllegalArgumentException("amount cannot be negative");
+        if (amount <= 0) throw new IllegalArgumentException("amount must be greater than zero");
         long next = this.balance - amount;
-        if  (next < 0) throw new IllegalArgumentException("insufficient balance");
+        if (next < 0) throw new IllegalArgumentException("insufficient balance");
         this.balance = next;
     }
 }

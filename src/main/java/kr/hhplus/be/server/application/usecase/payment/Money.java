@@ -6,7 +6,7 @@ public final class Money {
     private final long value;
 
     public static Money of(long value) {
-        if (value < 0) throw new IllegalArgumentException("money must be >= 0");
+        if (value < 0) throw new IllegalArgumentException("money must be greater than zero");
         return new Money(value);
     }
 
@@ -15,12 +15,12 @@ public final class Money {
     public long value() { return value; }
 
     public Money plus(long amount) {
-        if (amount < 0) throw new IllegalArgumentException("amount must be >= 0");
+        if (amount < 0) throw new IllegalArgumentException("amount must be greater than zero");
         return new Money(this.value + amount);
     }
 
     public Money minus(long amount) {
-        if (amount < 0) throw new IllegalArgumentException("amount must be >= 0");
+        if (amount < 0) throw new IllegalArgumentException("amount must be greater than zero");
         long next = this.value - amount;
         if (next < 0) throw new IllegalArgumentException("insufficient balance");
         return new Money(next);
