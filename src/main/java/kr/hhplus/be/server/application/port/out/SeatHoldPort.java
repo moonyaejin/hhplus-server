@@ -1,6 +1,7 @@
 package kr.hhplus.be.server.application.port.out;
 
 import kr.hhplus.be.server.domain.common.UserId;
+import kr.hhplus.be.server.domain.reservation.SeatHoldStatus;
 import kr.hhplus.be.server.domain.reservation.SeatIdentifier;
 import java.time.Duration;
 import java.util.List;

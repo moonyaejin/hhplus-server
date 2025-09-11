@@ -3,6 +3,7 @@ package kr.hhplus.be.server.application.service;
 import kr.hhplus.be.server.application.port.in.SeatQueryUseCase;
 import kr.hhplus.be.server.application.port.out.*;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
+import kr.hhplus.be.server.domain.reservation.SeatHoldStatus;
 import kr.hhplus.be.server.domain.reservation.SeatIdentifier;
 import kr.hhplus.be.server.domain.reservation.SeatNumber;
 import lombok.RequiredArgsConstructor;

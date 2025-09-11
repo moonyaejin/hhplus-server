@@ -1,7 +1,6 @@
 package kr.hhplus.be.server.application.service;
 
 import kr.hhplus.be.server.application.port.in.ReservationUseCase;
-import kr.hhplus.be.server.application.port.in.ReservationUseCase.*;
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;  // 추가
 import kr.hhplus.be.server.application.port.out.*;
 import kr.hhplus.be.server.domain.common.Money;

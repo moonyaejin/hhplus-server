@@ -1,7 +1,7 @@
 package kr.hhplus.be.server.infrastructure.persistence.reservation.redis;
 
 import kr.hhplus.be.server.application.port.out.SeatHoldPort;
-import kr.hhplus.be.server.application.port.out.SeatHoldStatus;
+import kr.hhplus.be.server.domain.reservation.SeatHoldStatus;
 import kr.hhplus.be.server.domain.common.UserId;
 import kr.hhplus.be.server.domain.reservation.SeatIdentifier;
 import org.springframework.data.redis.core.RedisCallback;

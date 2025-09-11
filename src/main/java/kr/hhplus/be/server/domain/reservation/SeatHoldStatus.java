@@ -1,4 +1,4 @@
-package kr.hhplus.be.server.application.port.out;
+package kr.hhplus.be.server.domain.reservation;
 
 import kr.hhplus.be.server.domain.common.UserId;
 import java.time.Duration;

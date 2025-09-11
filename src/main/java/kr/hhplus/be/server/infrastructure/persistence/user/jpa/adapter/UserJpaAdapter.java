@@ -1,6 +1,6 @@
 package kr.hhplus.be.server.infrastructure.persistence.user.jpa.adapter;
 
-import kr.hhplus.be.server.domain.user.UserRepository;
+import kr.hhplus.be.server.application.port.out.UserPort;
 import kr.hhplus.be.server.domain.user.model.User;
 import kr.hhplus.be.server.domain.common.UserId;
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.entity.UserJpaEntity;
@@ -13,7 +13,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class UserJpaAdapter implements UserRepository {
+public class UserJpaAdapter implements UserPort {
 
     private final UserJpaRepository repo;
 
