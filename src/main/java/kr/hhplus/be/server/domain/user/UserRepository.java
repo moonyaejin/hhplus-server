@@ -1,7 +1,7 @@
 package kr.hhplus.be.server.domain.user;
 
 import kr.hhplus.be.server.domain.user.model.User;
-import kr.hhplus.be.server.domain.user.model.UserId;
+import kr.hhplus.be.server.domain.common.UserId;
 
 import java.util.List;
 import java.util.Optional;

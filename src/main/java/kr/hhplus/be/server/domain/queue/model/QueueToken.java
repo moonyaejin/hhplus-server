@@ -1,20 +1,23 @@
 package kr.hhplus.be.server.domain.queue.model;
 
-import java.util.Objects;
+import java.util.UUID;
 
-public final class QueueToken {
-    private final String value;
+/**
+ * 대기열 토큰 Value Object
+ */
+public record QueueToken(String value) {
 
-    public QueueToken(String value) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("token must not be blank");
-        this.value = value;
+    public QueueToken {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("토큰 값은 비어있을 수 없습니다");
+        }
     }
 
-    public String value() { return value; }
-
-    @Override public String toString() { return value; }
-    @Override public boolean equals(Object o) {
-        return (this == o) || (o instanceof QueueToken t && value.equals(t.value));
+    public static QueueToken generate() {
+        return new QueueToken(UUID.randomUUID().toString());
     }
-    @Override public int hashCode() { return Objects.hash(value); }
+
+    public static QueueToken of(String value) {
+        return new QueueToken(value);
+    }
 }

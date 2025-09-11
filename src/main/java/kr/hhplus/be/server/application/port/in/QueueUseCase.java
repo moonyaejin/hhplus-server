@@ -1,12 +1,22 @@
 package kr.hhplus.be.server.application.port.in;
 
+import java.time.LocalDateTime;
+
 public interface QueueUseCase {
-    QueueResult issue(String userId);
 
-    boolean isActive(String token);
+    record IssueTokenCommand(String userId) {}
 
-    void expire(String token);
+    record TokenInfo(
+            String token,
+            String userId,
+            String status,
+            long waitingNumber,
+            LocalDateTime expiresAt
+    ) {}
 
-    record QueueResult(String token, String userId) {
-    }
+    TokenInfo issueToken(IssueTokenCommand command);
+    TokenInfo getTokenInfo(String token);
+    void expireToken(String token);
+    boolean isTokenActive(String token);
+    String getUserIdByToken(String token);
 }

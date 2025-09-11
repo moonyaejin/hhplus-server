@@ -1,12 +1,14 @@
 package kr.hhplus.be.server;
 
-import kr.hhplus.be.server.application.usecase.concert.ConcertService;
+import kr.hhplus.be.server.application.port.out.ConfirmedReservationPort;
+import kr.hhplus.be.server.application.port.out.SeatQueryPort;
+import kr.hhplus.be.server.application.service.ConcertService;
+import kr.hhplus.be.server.application.port.out.ConcertPort;
+import kr.hhplus.be.server.application.port.out.ConcertSchedulePort;
 import kr.hhplus.be.server.domain.concert.Concert;
-import kr.hhplus.be.server.domain.concert.ConcertRepository;
-import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.entity.ConcertJpaEntity;
-import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.entity.ConcertScheduleJpaEntity;
-import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleJpaRepository;
-import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationJpaRepository;
+import kr.hhplus.be.server.domain.concert.ConcertId;
+import kr.hhplus.be.server.domain.concert.ConcertSchedule;
+import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,24 +22,26 @@ import static org.mockito.Mockito.*;
 
 class ConcertServiceTest {
 
-    private ConcertRepository concertRepository;
-    private ConcertScheduleJpaRepository scheduleRepository;
-    private ConfirmedReservationJpaRepository confirmedReservationRepository;
+    private ConcertPort concertPort;
+    private ConcertSchedulePort schedulePort;
+    private SeatQueryPort seatQueryPort;
+    private ConfirmedReservationPort confirmedReservationPort;
     private ConcertService concertService;
 
     @BeforeEach
     void setUp() {
-        concertRepository = mock(ConcertRepository.class);
-        scheduleRepository = mock(ConcertScheduleJpaRepository.class);
-        confirmedReservationRepository = mock(ConfirmedReservationJpaRepository.class);
-        concertService = new ConcertService(concertRepository, scheduleRepository, confirmedReservationRepository);
+        concertPort = mock(ConcertPort.class);
+        schedulePort = mock(ConcertSchedulePort.class);
+        seatQueryPort = mock(SeatQueryPort.class);
+        confirmedReservationPort = mock(ConfirmedReservationPort.class);
+        concertService = new ConcertService(concertPort, schedulePort, seatQueryPort, confirmedReservationPort);
     }
 
     @Test
     void 모든_콘서트를_조회한다() {
         // given
-        Concert concert = new Concert(1L, "테스트 공연");
-        when(concertRepository.findAll()).thenReturn(List.of(concert));
+        Concert concert = new Concert(new ConcertId(1L), "테스트 공연"); // Value Object 사용
+        when(concertPort.findAll()).thenReturn(List.of(concert));
 
         // when
         List<Concert> concerts = concertService.listConcerts();
@@ -50,8 +54,8 @@ class ConcertServiceTest {
     @Test
     void ID로_콘서트를_조회한다() {
         // given
-        Concert concert = new Concert(1L, "테스트 공연");
-        when(concertRepository.findById(1L)).thenReturn(Optional.of(concert));
+        Concert concert = new Concert(new ConcertId(1L), "테스트 공연"); // Value Object 사용
+        when(concertPort.findById(1L)).thenReturn(Optional.of(concert));
 
         // when
         Optional<Concert> result = concertService.getConcert(1L);
@@ -65,7 +69,7 @@ class ConcertServiceTest {
     void 존재하지_않는_스케줄_조회시_예외가_발생한다() {
         // given
         LocalDate date = LocalDate.now();
-        when(scheduleRepository.findByConcertIdAndConcertDate(1L, date)).thenReturn(Optional.empty());
+        when(schedulePort.findByConcertIdAndConcertDate(1L, date)).thenReturn(Optional.empty());
 
         // when & then
         assertThrows(IllegalArgumentException.class,
@@ -76,12 +80,16 @@ class ConcertServiceTest {
     void 예약된_좌석을_제외하고_남은_좌석을_조회한다() {
         // given
         LocalDate date = LocalDate.now();
-        var concert = new ConcertJpaEntity("테스트 공연"); // 최소 생성자 or builder 필요
-        var schedule = new ConcertScheduleJpaEntity(concert, date, 5); // seatCount=5
+        ConcertSchedule schedule = new ConcertSchedule(
+                new ConcertScheduleId(1L),  // Value Object 사용
+                new ConcertId(1L),          // Value Object 사용
+                date,
+                5  // seatCount=5
+        );
 
-        when(scheduleRepository.findByConcertIdAndConcertDate(1L, date))
+        when(schedulePort.findByConcertIdAndConcertDate(1L, date))
                 .thenReturn(Optional.of(schedule));
-        when(confirmedReservationRepository.findSeatNosByConcertDate(date))
+        when(confirmedReservationPort.findSeatNosByConcertDate(date))
                 .thenReturn(List.of(2, 4)); // 2번, 4번 좌석 예약됨
 
         // when

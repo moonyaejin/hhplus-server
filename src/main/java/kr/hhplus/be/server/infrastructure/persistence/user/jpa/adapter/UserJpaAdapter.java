@@ -2,7 +2,7 @@ package kr.hhplus.be.server.infrastructure.persistence.user.jpa.adapter;
 
 import kr.hhplus.be.server.domain.user.UserRepository;
 import kr.hhplus.be.server.domain.user.model.User;
-import kr.hhplus.be.server.domain.user.model.UserId;
+import kr.hhplus.be.server.domain.common.UserId;
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.entity.UserJpaEntity;
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.repository.UserJpaRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ public class UserJpaAdapter implements UserRepository {
 
     @Override
     public Optional<User> findById(UserId id) {
-        return repo.findById(id.value()).map(this::toDomain);
+        return repo.findById(id.asUUID()).map(this::toDomain);
     }
 
     @Override
@@ -34,17 +34,20 @@ public class UserJpaAdapter implements UserRepository {
 
     @Override
     public User save(User user) {
-        UserJpaEntity e = new UserJpaEntity(user.id().value(), user.name());
+        UserJpaEntity e = new UserJpaEntity(user.id().asUUID(), user.name());
         UserJpaEntity saved = repo.save(e);
         return toDomain(saved);
     }
 
     @Override
     public boolean exists(UserId id) {
-        return repo.existsById(id.value());
+        return repo.existsById(id.asUUID());
     }
 
     private User toDomain(UserJpaEntity e) {
-        return new User(new UserId(e.getId()), e.getName(), e.getCreatedAt());
+        return new User(
+                UserId.of(e.getId()),
+                e.getName(),
+                e.getCreatedAt());
     }
 }

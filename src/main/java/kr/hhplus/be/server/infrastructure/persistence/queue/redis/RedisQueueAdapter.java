@@ -6,7 +6,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -18,18 +17,25 @@ public class RedisQueueAdapter implements QueuePort {
         this.redis = redis;
     }
 
-    private String key(String token) { return "queue:token:" + token; }
+    private String key(String token) {
+        return "queue:token:" + token;
+    }
 
     @Override
-    public boolean isActive(String token) { return Boolean.TRUE.equals(redis.hasKey(key(token))); }
+    public boolean isActive(String token) {
+        return Boolean.TRUE.equals(redis.hasKey(key(token)));
+    }
 
     @Override
-    public String userIdOf(String token) { return redis.opsForValue().get(key(token)); }
+    public String userIdOf(String token) {
+        return redis.opsForValue().get(key(token));
+    }
 
     @Override
-    public void expire(String token) { redis.delete(key(token)); }
+    public void expire(String token) {
+        redis.delete(key(token));
+    }
 
-    // 어댑터가 토큰 발급/보관
     @Override
     public QueueToken issue(String userId) {
         String token = UUID.randomUUID().toString();
@@ -37,8 +43,16 @@ public class RedisQueueAdapter implements QueuePort {
         return new QueueToken(token);
     }
 
-    // 도메인 타입 오버로드
-    public boolean isActive(QueueToken token) { return isActive(token.value()); }
-    public Optional<String> userIdOf(QueueToken token) { return Optional.ofNullable(userIdOf(token.value())); }
-    public void expire(QueueToken token) { expire(token.value()); }
+    // QueueToken 편의 메서드들 (포트 인터페이스에는 없음)
+    public boolean isActiveToken(QueueToken token) {
+        return isActive(token.value());
+    }
+
+    public String userIdOfToken(QueueToken token) {
+        return userIdOf(token.value());
+    }
+
+    public void expireToken(QueueToken token) {
+        expire(token.value());
+    }
 }

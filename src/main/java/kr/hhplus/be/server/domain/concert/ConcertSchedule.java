@@ -3,23 +3,27 @@ package kr.hhplus.be.server.domain.concert;
 import java.time.LocalDate;
 
 public class ConcertSchedule {
-    private final Long id;
-    private final Long concertId;
+    private final ConcertScheduleId id;
+    private final ConcertId concertId;
     private final LocalDate concertDate;
-    private final int seatCount;
+    private final int totalSeats;
 
-    public ConcertSchedule(Long id, Long concertId, LocalDate concertDate, int seatCount) {
-        if (concertDate == null) throw new IllegalArgumentException("concertDate cannot be null");
-        if (seatCount <= 0) throw new IllegalArgumentException("seatCount must be greater than zero");
+    public ConcertSchedule(ConcertScheduleId id, ConcertId concertId, LocalDate concertDate, int totalSeats) {
+        if (concertDate == null) {
+            throw new IllegalArgumentException("콘서트 날짜는 필수입니다");
+        }
+        if (totalSeats <= 0 || totalSeats > 50) {
+            throw new IllegalArgumentException("좌석 수는 1~50 사이여야 합니다");
+        }
 
         this.id = id;
         this.concertId = concertId;
         this.concertDate = concertDate;
-        this.seatCount = seatCount;
+        this.totalSeats = totalSeats;
     }
 
-    public Long getId() { return id; }
-    public Long getConcertId() { return concertId; }
+    public ConcertScheduleId getId() { return id; }
+    public ConcertId getConcertId() { return concertId; }
     public LocalDate getConcertDate() { return concertDate; }
-    public int getSeatCount() { return seatCount; }
+    public int getTotalSeats() { return totalSeats; }
 }

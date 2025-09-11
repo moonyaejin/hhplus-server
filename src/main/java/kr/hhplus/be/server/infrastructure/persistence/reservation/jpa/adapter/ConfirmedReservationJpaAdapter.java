@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -33,5 +34,11 @@ public class ConfirmedReservationJpaAdapter implements ConfirmedReservationPort 
                 paidAt
         );
         return repository.save(entity).getId();
+    }
+
+    @Override
+    public List<Integer> findSeatNosByConcertDate(LocalDate date) {
+        // 기존 JPA Repository에 이미 이 메서드가 있는지 확인하세요
+        return repository.findSeatNosByConcertDate(date);
     }
 }
