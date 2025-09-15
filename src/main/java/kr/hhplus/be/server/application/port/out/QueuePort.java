@@ -8,7 +8,6 @@ public interface QueuePort {
     void expire(String token);
     QueueToken issue(String userId);
 
-    // 추가 메서드
     Long getWaitingPosition(String token);  // 대기 순번 조회
     Long getActiveCount();  // 활성 사용자 수
     Long getWaitingCount();  // 대기 사용자 수

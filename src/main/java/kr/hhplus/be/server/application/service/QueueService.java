@@ -2,8 +2,9 @@ package kr.hhplus.be.server.application.service;
 
 import kr.hhplus.be.server.application.port.in.QueueUseCase;
 import kr.hhplus.be.server.application.port.out.QueuePort;
+import kr.hhplus.be.server.domain.queue.QueueTokenNotActiveException;
 import kr.hhplus.be.server.domain.queue.model.QueueToken;
-import kr.hhplus.be.server.infrastructure.persistence.queue.redis.RedisQueueAdapter;
+import kr.hhplus.be.server.domain.reservation.QueueTokenExpiredException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,17 +22,13 @@ public class QueueService implements QueueUseCase {
     @Override
     public TokenInfo issueToken(IssueTokenCommand command) {
         QueueToken token = queuePort.issue(command.userId());
-
-        // 활성화 여부 확인
         boolean isActive = queuePort.isActive(token.value());
 
-        // 대기 순번 조회 (활성화되지 않은 경우)
         Long waitingNumber = 0L;
         String status = "ACTIVE";
 
         if (!isActive) {
-            RedisQueueAdapter redisAdapter = (RedisQueueAdapter) queuePort;
-            waitingNumber = redisAdapter.getWaitingPosition(token.value());
+            waitingNumber = queuePort.getWaitingPosition(token.value());
             status = "WAITING";
         }
 
@@ -50,12 +47,10 @@ public class QueueService implements QueueUseCase {
         boolean isActive = queuePort.isActive(token);
 
         if (!isActive) {
-            // 대기 중인지 확인
-            RedisQueueAdapter redisAdapter = (RedisQueueAdapter) queuePort;
-            Long position = redisAdapter.getWaitingPosition(token);
+            Long position = queuePort.getWaitingPosition(token);
 
             if (position == null) {
-                throw new RuntimeException("유효하지 않거나 만료된 토큰입니다");
+                throw new QueueTokenExpiredException("유효하지 않거나 만료된 토큰입니다");
             }
 
             String userId = queuePort.userIdOf(token);
@@ -64,7 +59,7 @@ public class QueueService implements QueueUseCase {
                     userId,
                     "WAITING",
                     position,
-                    null // 대기 중인 토큰은 만료 시간 없음
+                    null
             );
         }
 
@@ -94,24 +89,29 @@ public class QueueService implements QueueUseCase {
     public String getUserIdByToken(String token) {
         String userId = queuePort.userIdOf(token);
         if (userId == null) {
-            throw new RuntimeException("유효하지 않거나 만료된 토큰입니다");
+            throw new QueueTokenExpiredException("유효하지 않거나 만료된 토큰입니다");
         }
         return userId;
     }
 
-    // 대기열 처리용 메서드 추가
     public void processQueue() {
-        RedisQueueAdapter redisAdapter = (RedisQueueAdapter) queuePort;
-
-        // 현재 활성 사용자 수 확인
-        Long activeCount = redisAdapter.getActiveCount();
-
-        // 활성화 가능한 슬롯 수 계산
+        Long activeCount = queuePort.getActiveCount();
         int availableSlots = 100 - activeCount.intValue();
 
         if (availableSlots > 0) {
-            // 대기열에서 활성화
-            redisAdapter.activateNextUsers(availableSlots);
+            queuePort.activateNextUsers(availableSlots);
+        }
+    }
+
+    public void validateActiveToken(String token) {
+        if (!queuePort.isActive(token)) {
+            Long position = queuePort.getWaitingPosition(token);
+            if (position != null) {
+                throw new QueueTokenNotActiveException(
+                        String.format("대기 중인 토큰입니다. 현재 순번: %d", position)
+                );
+            }
+            throw new QueueTokenExpiredException("유효하지 않거나 만료된 토큰입니다");
         }
     }
 }

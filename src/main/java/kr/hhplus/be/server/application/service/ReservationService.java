@@ -10,7 +10,6 @@ import kr.hhplus.be.server.domain.concert.ConcertSchedule;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
 import kr.hhplus.be.server.domain.queue.QueueTokenNotActiveException;
 import kr.hhplus.be.server.domain.reservation.*;
-import kr.hhplus.be.server.infrastructure.persistence.queue.redis.RedisQueueAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -161,20 +160,25 @@ public class ReservationService implements ReservationUseCase {
         );
     }
 
-    // === Private Helper Methods ===
-    // 변경 없음 (기존 코드 유지)
 
     private void validateQueueToken(String token) {
-        if (!queuePort.isActive(token)) {
-            Long position = queuePort.getWaitingPosition(token);
+        // QueueService의 검증 메서드 재사용
+        try {
+            // QueueService를 주입받아서 사용하거나
+            // 아니면 직접 구현
+            if (!queuePort.isActive(token)) {
+                Long position = queuePort.getWaitingPosition(token);
 
-            if (position != null) {
-                throw new QueueTokenNotActiveException(
-                        String.format("대기 중인 토큰입니다. 현재 순번: %d", position)
-                );
+                if (position != null) {
+                    throw new QueueTokenNotActiveException(
+                            String.format("대기 중인 토큰입니다. 현재 순번: %d", position)
+                    );
+                }
+
+                throw new QueueTokenExpiredException("유효하지 않거나 만료된 토큰입니다");
             }
-
-            throw new QueueTokenExpiredException("유효하지 않거나 만료된 토큰입니다");
+        } catch (Exception e) {
+            throw e;
         }
     }
 

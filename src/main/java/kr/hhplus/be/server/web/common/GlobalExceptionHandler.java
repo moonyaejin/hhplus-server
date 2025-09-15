@@ -2,6 +2,8 @@ package kr.hhplus.be.server.web.common;
 
 import kr.hhplus.be.server.domain.common.exception.ConcertScheduleNotFoundException;
 import kr.hhplus.be.server.domain.payment.InsufficientBalanceException;
+import kr.hhplus.be.server.domain.payment.WalletNotFoundException;
+import kr.hhplus.be.server.domain.queue.QueueTokenNotActiveException;
 import kr.hhplus.be.server.domain.reservation.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,6 +20,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     ErrorResponse handleQueueTokenExpired(QueueTokenExpiredException e) {
         return new ErrorResponse("QUEUE_TOKEN_EXPIRED", e.getMessage());
+    }
+
+    @ExceptionHandler(QueueTokenNotActiveException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    ErrorResponse handleQueueTokenNotActive(QueueTokenNotActiveException e) {
+        return new ErrorResponse("QUEUE_TOKEN_NOT_ACTIVE", e.getMessage());
     }
 
     // ========== 예약 관련 예외 ==========
@@ -45,6 +53,18 @@ public class GlobalExceptionHandler {
         return new ErrorResponse("RESERVATION_NOT_FOUND", e.getMessage());
     }
 
+    @ExceptionHandler(ReservationExpiredException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    ErrorResponse handleReservationExpired(ReservationExpiredException e) {
+        return new ErrorResponse("RESERVATION_EXPIRED", e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidReservationStateException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    ErrorResponse handleInvalidReservationState(InvalidReservationStateException e) {
+        return new ErrorResponse("INVALID_RESERVATION_STATE", e.getMessage());
+    }
+
     @ExceptionHandler(UnauthorizedReservationAccessException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     ErrorResponse handleUnauthorizedAccess(UnauthorizedReservationAccessException e) {
@@ -65,6 +85,12 @@ public class GlobalExceptionHandler {
         return new ErrorResponse("INSUFFICIENT_BALANCE", e.getMessage());
     }
 
+    @ExceptionHandler(WalletNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    ErrorResponse handleWalletNotFound(WalletNotFoundException e) {
+        return new ErrorResponse("WALLET_NOT_FOUND", e.getMessage());
+    }
+
     // ========== 일반 예외 ==========
     @ExceptionHandler(IllegalStateException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -76,5 +102,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     ErrorResponse handleIllegalArgument(IllegalArgumentException e) {
         return new ErrorResponse("INVALID_ARGUMENT", e.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    ErrorResponse handleGenericException(Exception e) {
+        return new ErrorResponse("INTERNAL_ERROR", "서버 내부 오류가 발생했습니다");
     }
 }
