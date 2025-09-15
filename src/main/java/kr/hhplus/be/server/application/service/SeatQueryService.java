@@ -12,13 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;  // Map 추가
+import java.util.*;
 
-/**
- * 좌석 조회 애플리케이션 서비스
- * - 여러 포트를 조율하여 좌석 상태 조회
- * - 복잡한 비즈니스 로직을 애플리케이션 계층에서 처리
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -29,7 +24,7 @@ public class SeatQueryService implements SeatQueryUseCase {
     private final SeatHoldPort seatHoldPort;
 
     @Override
-    public List<SeatQueryPort.SeatView> getSeatsStatus(Long concertId, LocalDate date) {
+    public List<SeatView> getSeatsStatus(Long concertId, LocalDate date) {
         // 1. 콘서트 스케줄 조회
         var schedule = concertSchedulePort.findByConcertIdAndConcertDate(concertId, date)
                 .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 콘서트 스케줄을 찾을 수 없습니다"));
@@ -55,15 +50,15 @@ public class SeatQueryService implements SeatQueryUseCase {
                 seatHoldPort.getHoldStatusBulk(nonConfirmedSeats);
 
         // 5. 결과 조립
-        List<SeatQueryPort.SeatView> seatViews = new ArrayList<>(totalSeats);
+        List<SeatView> seatViews = new ArrayList<>(totalSeats);
         LocalDateTime now = LocalDateTime.now();
 
         for (int seatNo = 1; seatNo <= totalSeats; seatNo++) {
             if (confirmedSeats.contains(seatNo)) {
                 // 확정된 좌석
-                seatViews.add(new SeatQueryPort.SeatView(
+                seatViews.add(new SeatView(
                         seatNo,
-                        SeatQueryPort.SeatStatus.CONFIRMED,
+                        SeatStatus.CONFIRMED,
                         null
                 ));
             } else {
@@ -74,16 +69,16 @@ public class SeatQueryService implements SeatQueryUseCase {
                 if (holdStatus != null && !holdStatus.isExpired(now)) {
                     // 점유된 좌석
                     long remainingSeconds = holdStatus.remainingTime(now).getSeconds();
-                    seatViews.add(new SeatQueryPort.SeatView(
+                    seatViews.add(new SeatView(
                             seatNo,
-                            SeatQueryPort.SeatStatus.HELD,
+                            SeatStatus.HELD,
                             remainingSeconds
                     ));
                 } else {
                     // 예약 가능한 좌석
-                    seatViews.add(new SeatQueryPort.SeatView(
+                    seatViews.add(new SeatView(
                             seatNo,
-                            SeatQueryPort.SeatStatus.FREE,
+                            SeatStatus.FREE,
                             null
                     ));
                 }
@@ -95,7 +90,6 @@ public class SeatQueryService implements SeatQueryUseCase {
 
     @Override
     public List<LocalDate> getAvailableDates(int days) {
-        // SeatQueryUseCase 인터페이스의 메서드 구현
         return concertSchedulePort.findAvailableDates(days);
     }
 }

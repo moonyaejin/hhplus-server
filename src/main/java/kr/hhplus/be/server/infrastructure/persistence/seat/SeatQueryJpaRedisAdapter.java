@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.infrastructure.persistence.seat;
 
+import kr.hhplus.be.server.application.port.in.SeatQueryUseCase;
 import kr.hhplus.be.server.application.port.out.SeatQueryPort;
 import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.ConcertScheduleJpaRepository;
 import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.ConfirmedReservationJpaRepository;
@@ -15,13 +16,12 @@ import java.util.*;
 @RequiredArgsConstructor
 public class SeatQueryJpaRedisAdapter implements SeatQueryPort {
 
-    // 어댑터에서만 인프라 기술에 의존
     private final ConfirmedReservationJpaRepository confirmedRepo;
     private final ConcertScheduleJpaRepository scheduleRepo;
     private final StringRedisTemplate redis;
 
     @Override
-    public List<SeatView> getSeatsStatus(Long concertId, LocalDate date) {
+    public List<SeatQueryUseCase.SeatView> getSeatsStatus(Long concertId, LocalDate date) {
         // 1) 좌석 수를 회차 스케줄에서 조회
         var schedule = scheduleRepo.findByConcertIdAndConcertDate(concertId, date)
                 .orElseThrow(() -> new EmptyResultDataAccessException("concert schedule not found", 1));
@@ -49,19 +49,19 @@ public class SeatQueryJpaRedisAdapter implements SeatQueryPort {
                 });
 
         // 5) 결과 조립
-        List<SeatView> list = new ArrayList<>(seatCount);
+        List<SeatQueryUseCase.SeatView> list = new ArrayList<>(seatCount);
         int idx = 0;
         for (int n = 1; n <= seatCount; n++) {
             if (confirmed.contains(n)) {
-                list.add(new SeatView(n, SeatStatus.CONFIRMED, null));
+                list.add(new SeatQueryUseCase.SeatView(n, SeatQueryUseCase.SeatStatus.CONFIRMED, null));
             } else {
                 Long pttl = (pttlsRaw != null && idx < pttlsRaw.size())
                         ? (Long) pttlsRaw.get(idx++)
                         : null;
                 if (pttl != null && pttl > 0) {
-                    list.add(new SeatView(n, SeatStatus.HELD, pttl / 1000));
+                    list.add(new SeatQueryUseCase.SeatView(n, SeatQueryUseCase.SeatStatus.HELD, pttl / 1000));
                 } else {
-                    list.add(new SeatView(n, SeatStatus.FREE, null));
+                    list.add(new SeatQueryUseCase.SeatView(n, SeatQueryUseCase.SeatStatus.FREE, null));
                 }
             }
         }

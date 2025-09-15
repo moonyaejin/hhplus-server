@@ -1,6 +1,8 @@
 package kr.hhplus.be.server.web.concert;
 
-import kr.hhplus.be.server.application.port.in.ConcertUseCase;
+import kr.hhplus.be.server.application.service.ConcertService;
+import kr.hhplus.be.server.web.concert.dto.ConcertDto;
+import kr.hhplus.be.server.web.concert.dto.ScheduleDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -14,26 +16,33 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ConcertController {
 
-    private final ConcertUseCase concertUseCase;
+    // UseCase 대신 Service 직접 주입
+    private final ConcertService concertService;
 
     @GetMapping
-    public ResponseEntity<List<ConcertUseCase.ConcertInfo>> getAllConcerts() {
-        var result = concertUseCase.getAllConcerts();
-        return ResponseEntity.ok(result);
+    public ResponseEntity<List<ConcertDto>> getAllConcerts() {
+        List<ConcertDto> concerts = concertService.getAllConcerts();
+        return ResponseEntity.ok(concerts);
     }
 
     @GetMapping("/dates")
-    public ResponseEntity<List<LocalDate>> getAvailableDates(@RequestParam(defaultValue = "30") int days) {
-        var result = concertUseCase.getAvailableDates(days);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<List<LocalDate>> getAvailableDates(
+            @RequestParam(defaultValue = "30") int days) {
+        List<LocalDate> dates = concertService.getAvailableDates(days);
+        return ResponseEntity.ok(dates);
     }
 
     @GetMapping("/{concertId}/schedule")
-    public ResponseEntity<ConcertUseCase.ScheduleInfo> getConcertSchedule(
+    public ResponseEntity<ScheduleDto> getConcertSchedule(
             @PathVariable Long concertId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        ScheduleDto schedule = concertService.getConcertSchedule(concertId, date);
+        return ResponseEntity.ok(schedule);
+    }
 
-        var result = concertUseCase.getConcertSchedule(concertId, date);
-        return ResponseEntity.ok(result);
+    @GetMapping("/{concertId}")
+    public ResponseEntity<ConcertDto> getConcertDetail(@PathVariable Long concertId) {
+        ConcertDto concert = concertService.getConcertDetail(concertId);
+        return ResponseEntity.ok(concert);
     }
 }
