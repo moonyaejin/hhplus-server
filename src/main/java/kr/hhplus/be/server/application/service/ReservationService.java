@@ -8,7 +8,9 @@ import kr.hhplus.be.server.domain.common.UserId;
 import kr.hhplus.be.server.domain.common.exception.ConcertScheduleNotFoundException;
 import kr.hhplus.be.server.domain.concert.ConcertSchedule;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
+import kr.hhplus.be.server.domain.queue.QueueTokenNotActiveException;
 import kr.hhplus.be.server.domain.reservation.*;
+import kr.hhplus.be.server.infrastructure.persistence.queue.redis.RedisQueueAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -164,6 +166,14 @@ public class ReservationService implements ReservationUseCase {
 
     private void validateQueueToken(String token) {
         if (!queuePort.isActive(token)) {
+            Long position = queuePort.getWaitingPosition(token);
+
+            if (position != null) {
+                throw new QueueTokenNotActiveException(
+                        String.format("대기 중인 토큰입니다. 현재 순번: %d", position)
+                );
+            }
+
             throw new QueueTokenExpiredException("유효하지 않거나 만료된 토큰입니다");
         }
     }

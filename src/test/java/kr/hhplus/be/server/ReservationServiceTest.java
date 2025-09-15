@@ -119,6 +119,7 @@ class ReservationServiceTest {
         );
 
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(false);
+        when(queuePort.getWaitingPosition(QUEUE_TOKEN)).thenReturn(null);  // 추가
 
         // when & then
         assertThatThrownBy(() -> reservationService.temporaryAssign(command))
