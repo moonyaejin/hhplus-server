@@ -25,7 +25,7 @@ spring:
       hibernate.format_sql: true
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    # baseline-on-migrate: true
 
 ---
 spring:
@@ -37,7 +37,13 @@ spring:
     username: hhplus_user
     password: hhplus_user
   jpa:
-    show-sql: true
+    show-sql: false
+
+logging:
+  level:
+    org.hibernate.SQL: WARN  # SQL 로그 레벨 낮추기
+    org.hibernate.type: WARN
+    kr.hhplus.be.server.application.scheduler: INFO  # 스케줄러 로그 레벨
 
 app:
   queue:
@@ -67,6 +73,8 @@ app:
     token-ttl-minutes: 1  # 테스트용 짧은 시간
     scheduler:
       enabled: false
+      process-interval-ms: 5000
   scheduler:
     cleanup:
       enabled: false
+      interval-ms: 300000

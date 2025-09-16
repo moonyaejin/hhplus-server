@@ -19,7 +19,7 @@ import java.util.*;
 
 @Slf4j
 @Component
-@Primary  // Redis 구현체보다 우선
+@Primary
 @RequiredArgsConstructor
 public class MySqlSeatHoldAdapter implements SeatHoldPort {
 

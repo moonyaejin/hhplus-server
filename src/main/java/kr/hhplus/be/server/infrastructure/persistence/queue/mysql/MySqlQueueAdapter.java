@@ -20,7 +20,7 @@ import java.util.UUID;
 
 @Slf4j
 @Component
-@Primary  // Redis 구현체보다 우선
+@Primary
 @RequiredArgsConstructor
 public class MySqlQueueAdapter implements QueuePort {
 
