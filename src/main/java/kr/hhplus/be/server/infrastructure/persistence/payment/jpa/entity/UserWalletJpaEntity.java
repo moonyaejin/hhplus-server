@@ -32,6 +32,7 @@ public class UserWalletJpaEntity {
     public UserWalletJpaEntity(UUID userId, long initialBalance) {
         this.userId = userId;
         this.balance = initialBalance;
+        this.updatedAt = Instant.now();
     }
 
     public UUID getUserId() { return userId; }

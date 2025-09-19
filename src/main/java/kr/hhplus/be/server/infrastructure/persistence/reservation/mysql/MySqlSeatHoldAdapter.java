@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -26,29 +27,31 @@ public class MySqlSeatHoldAdapter implements SeatHoldPort {
     private final SeatHoldJpaRepository repository;
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean tryHold(SeatIdentifier seatIdentifier, UserId userId, Duration holdDuration) {
         Long scheduleId = seatIdentifier.scheduleId().value();
         Integer seatNumber = seatIdentifier.seatNumber().value();
 
-        // 1. 먼저 만료된 점유 정리
-        cleanupExpiredHolds();
-
-        // 2. 이미 점유되어 있는지 확인
-        Optional<SeatHoldJpaEntity> existing = repository
-                .findByScheduleIdAndSeatNumber(scheduleId, seatNumber);
-
-        if (existing.isPresent() && !existing.get().isExpired()) {
-            return false;  // 이미 다른 사용자가 점유 중
-        }
-
-        // 3. 만료된 점유가 있다면 삭제
-        if (existing.isPresent()) {
-            repository.delete(existing.get());
-        }
-
-        // 4. 새로운 점유 시도
         try {
+            // 기존 점유 확인
+            Optional<SeatHoldJpaEntity> existing = repository
+                    .findByScheduleIdAndSeatNumber(scheduleId, seatNumber);
+
+            if (existing.isPresent()) {
+                SeatHoldJpaEntity existingHold = existing.get();
+
+                // 만료되지 않았으면 실패
+                if (!existingHold.isExpired()) {
+                    log.debug("좌석이 이미 점유 중: scheduleId={}, seatNo={}", scheduleId, seatNumber);
+                    return false;
+                }
+
+                // 만료된 경우 ID로 삭제
+                repository.deleteById(existingHold.getId());
+                repository.flush(); // 즉시 반영
+            }
+
+            // 새로운 점유 생성
             LocalDateTime now = LocalDateTime.now();
             SeatHoldJpaEntity newHold = new SeatHoldJpaEntity(
                     scheduleId,
@@ -57,12 +60,21 @@ public class MySqlSeatHoldAdapter implements SeatHoldPort {
                     now,
                     now.plus(holdDuration)
             );
+
             repository.save(newHold);
+            repository.flush(); // 즉시 반영
+
+            log.info("좌석 점유 성공: scheduleId={}, seatNo={}, userId={}",
+                    scheduleId, seatNumber, userId.asString());
             return true;
+
         } catch (DataIntegrityViolationException e) {
-            // 동시성 이슈로 실패
-            log.debug("좌석 점유 실패 - 동시 요청: {}", seatIdentifier);
+            // 동시성 이슈로 중복 발생
+            log.debug("좌석 점유 실패 - 동시 요청: scheduleId={}, seatNo={}", scheduleId, seatNumber);
             return false;
+        } catch (Exception e) {
+            log.error("좌석 점유 중 예외 발생: scheduleId={}, seatNo={}", scheduleId, seatNumber, e);
+            throw new RuntimeException("좌석 점유 실패", e); // 예외를 던지지 말고 false 반환
         }
     }
 
@@ -154,11 +166,16 @@ public class MySqlSeatHoldAdapter implements SeatHoldPort {
         return resultMap;
     }
 
-    // 만료된 점유 정리 (주기적으로 실행 또는 조회 시 실행)
+    // 만료된 점유 정리
     private void cleanupExpiredHolds() {
-        int deleted = repository.deleteExpiredHolds(LocalDateTime.now());
-        if (deleted > 0) {
-            log.debug("만료된 좌석 점유 {}건 정리", deleted);
+        try {
+            int deleted = repository.deleteExpiredHolds(LocalDateTime.now());
+            if (deleted > 0) {
+                log.debug("만료된 좌석 점유 {}건 정리", deleted);
+            }
+        } catch (Exception e) {
+            log.error("만료된 홀드 정리 실패", e);
+            // 실패해도 계속 진행
         }
     }
 }

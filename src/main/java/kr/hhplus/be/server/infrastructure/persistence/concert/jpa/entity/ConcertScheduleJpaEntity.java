@@ -1,7 +1,10 @@
 package kr.hhplus.be.server.infrastructure.persistence.concert.jpa.entity;
 
 import jakarta.persistence.*;
-        import java.time.Instant;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
@@ -24,10 +27,12 @@ public class ConcertScheduleJpaEntity {
     @Column(name = "seat_count", nullable = false)
     private int seatCount;
 
-    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     protected ConcertScheduleJpaEntity() {}
@@ -35,6 +40,8 @@ public class ConcertScheduleJpaEntity {
         this.concert = concert;
         this.concertDate = date;
         this.seatCount = seatCount;
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
     }
 
     public Long getId() { return id; }
