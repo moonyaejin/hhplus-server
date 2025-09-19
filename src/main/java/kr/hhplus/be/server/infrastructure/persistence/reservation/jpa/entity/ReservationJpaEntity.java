@@ -64,7 +64,9 @@ public class ReservationJpaEntity {
         this.status = status;
         this.temporaryAssignedAt = temporaryAssignedAt;
         this.confirmedAt = confirmedAt;
-        this.version = version;
+        if (version != null && version > 0) {
+            this.version = version;
+        }
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }

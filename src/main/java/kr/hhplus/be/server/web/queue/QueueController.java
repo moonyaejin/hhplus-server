@@ -2,7 +2,6 @@ package kr.hhplus.be.server.web.queue;
 
 import kr.hhplus.be.server.application.port.in.QueueUseCase;
 import kr.hhplus.be.server.application.port.out.QueuePort;
-import kr.hhplus.be.server.infrastructure.persistence.queue.redis.RedisQueueAdapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 public class QueueController {
 
     private final QueueUseCase queueUseCase;
-    private final QueuePort queuePort;  // QueuePort 주입 추가
+    private final QueuePort queuePort;
 
     @PostMapping("/token")
     public ResponseEntity<QueueUseCase.TokenInfo> issueToken(@RequestParam String userId) {
@@ -30,22 +29,15 @@ public class QueueController {
 
     @GetMapping("/status")
     public ResponseEntity<QueueStatusResponse> getQueueStatus() {
-        // QueuePort를 RedisQueueAdapter로 캐스팅
-        if (!(queuePort instanceof RedisQueueAdapter)) {
-            // 기본 응답 반환
-            return ResponseEntity.ok(new QueueStatusResponse(0L, 100L, 0L, 0L));
-        }
-
-        RedisQueueAdapter adapter = (RedisQueueAdapter) queuePort;
-
-        Long activeCount = adapter.getActiveCount();
-        Long waitingCount = adapter.getWaitingCount();
+        // QueuePort 인터페이스를 직접 사용 (MySQL이든 Redis든 상관없이)
+        Long activeCount = queuePort.getActiveCount();
+        Long waitingCount = queuePort.getWaitingCount();
 
         QueueStatusResponse response = new QueueStatusResponse(
                 activeCount,
                 100 - activeCount,  // 사용 가능한 슬롯
                 waitingCount,
-                waitingCount > 0 ? waitingCount * 10 / 60 : 0  // 예상 대기 시간(분)
+                waitingCount > 0 ? (waitingCount * 10 / 60) : 0L  // 예상 대기 시간(분)
         );
 
         return ResponseEntity.ok(response);

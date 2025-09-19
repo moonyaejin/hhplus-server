@@ -1,6 +1,8 @@
 package kr.hhplus.be.server.infrastructure.persistence.concert.jpa.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.time.Instant;
 
 @Entity
@@ -13,14 +15,19 @@ public class ConcertJpaEntity {
     @Column(nullable = false, length = 100)
     private String title;
 
-    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     protected ConcertJpaEntity() {}
-    public ConcertJpaEntity(String title) { this.title = title; }
+    public ConcertJpaEntity(String title) {
+        this.title = title;
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
+    }
 
     public Long getId() { return id; }
     public String getTitle() { return title; }

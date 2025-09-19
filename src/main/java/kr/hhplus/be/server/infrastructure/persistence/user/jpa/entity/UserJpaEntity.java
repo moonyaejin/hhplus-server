@@ -1,7 +1,9 @@
 package kr.hhplus.be.server.infrastructure.persistence.user.jpa.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
@@ -19,15 +21,20 @@ public class UserJpaEntity {
     @Column(name = "name", nullable = false, unique = true, length = 50)
     private String name;
 
-    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     protected UserJpaEntity() {}
     public UserJpaEntity(UUID id, String name) {
-        this.id = id; this.name = name;
+        this.id = id;
+        this.name = name;
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
     }
 
     public UUID getId() { return id; }

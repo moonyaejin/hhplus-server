@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.adapter;
 
+import jakarta.persistence.OptimisticLockException;
 import kr.hhplus.be.server.domain.reservation.*;
 import kr.hhplus.be.server.domain.common.UserId;
 import kr.hhplus.be.server.domain.common.Money;
@@ -21,8 +22,44 @@ public class ReservationJpaAdapter implements ReservationRepository {
 
     @Override
     public Reservation save(Reservation reservation) {
-        ReservationJpaEntity entity = toEntity(reservation);
-        ReservationJpaEntity savedEntity = jpaRepository.save(entity);
+        ReservationJpaEntity entity;
+
+        // ID로 기존 엔티티 존재 여부 확인
+        Optional<ReservationJpaEntity> existingEntity =
+                jpaRepository.findById(reservation.getId().value());
+
+        if (existingEntity.isEmpty()) {
+            // 신규 생성
+            entity = new ReservationJpaEntity(
+                    reservation.getId().value(),
+                    reservation.getUserId().asString(),
+                    reservation.getSeatIdentifier().scheduleId().value(),
+                    reservation.getSeatIdentifier().seatNumber().value(),
+                    reservation.getPrice().amount(),
+                    reservation.getStatus(),
+                    reservation.getTemporaryAssignedAt(),
+                    reservation.getConfirmedAt(),
+                    null  // version null로 설정
+            );
+        } else {
+            // 기존 엔티티 업데이트
+            entity = existingEntity.get();
+
+            // version 체크 (낙관적 락)
+            if (!entity.getVersion().equals(reservation.getVersion())) {
+                throw new OptimisticLockException(
+                        "예약이 다른 트랜잭션에 의해 수정되었습니다"
+                );
+            }
+
+            // 변경 가능한 필드만 업데이트
+            entity.setStatus(reservation.getStatus());
+            if (reservation.getConfirmedAt() != null) {
+                entity.setConfirmedAt(reservation.getConfirmedAt());
+            }
+        }
+
+        ReservationJpaEntity savedEntity = jpaRepository.saveAndFlush(entity);
         return toDomain(savedEntity);
     }
 
