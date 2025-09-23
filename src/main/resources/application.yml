@@ -10,7 +10,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     type: com.zaxxer.hikari.HikariDataSource
     hikari:
-      maximum-pool-size: 3
+      maximum-pool-size: 10
       connection-timeout: 10000
       max-lifetime: 60000
   jpa:
@@ -18,17 +18,14 @@ spring:
     generate-ddl: false
     show-sql: false
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
     properties:
       hibernate.timezone.default_storage: NORMALIZE_UTC
       hibernate.jdbc.time_zone: UTC
       hibernate.format_sql: true
-  data:
-    redis:
-      host: 127.0.0.1
-      port: ${REDIS_PORT:6379}
   flyway:
     enabled: true
+    # baseline-on-migrate: true
 
 ---
 spring:
@@ -37,21 +34,28 @@ spring:
       on-profile: local
   datasource:
     url: jdbc:mysql://localhost:3306/hhplus?characterEncoding=UTF-8&serverTimezone=UTC
-    username: application
-    password: application
-  data:
-    redis:
-      host: localhost
-      port: 6379
+    username: hhplus_user
+    password: hhplus_user
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    org.hibernate.SQL: WARN  # SQL 로그 레벨 낮추기
+    org.hibernate.type: WARN
+    kr.hhplus.be.server.application.scheduler: INFO  # 스케줄러 로그 레벨
 
 app:
   queue:
-    token-ttl-seconds: 900
     max-active-users: 100
     token-ttl-minutes: 10
     scheduler:
       enabled: true
       process-interval-ms: 1000
+  scheduler:
+    cleanup:
+      enabled: true
+      interval-ms: 60000
 
 ---
 spring:
@@ -62,16 +66,15 @@ spring:
     url: jdbc:mysql://localhost:3306/hhplus?characterEncoding=UTF-8&serverTimezone=UTC
     username: application
     password: application
-  data:
-    redis:
-      host: localhost
-      port: 6379
 
 app:
   queue:
-    token-ttl-seconds: 900
-    max-active-users: 100
-    token-ttl-minutes: 10
+    max-active-users: 10  # 테스트용 짧은 시간
+    token-ttl-minutes: 1  # 테스트용 짧은 시간
     scheduler:
       enabled: false
-      process-interval-ms: 1000
+      process-interval-ms: 5000
+  scheduler:
+    cleanup:
+      enabled: false
+      interval-ms: 300000

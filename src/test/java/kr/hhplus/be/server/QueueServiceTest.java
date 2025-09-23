@@ -4,7 +4,6 @@ import kr.hhplus.be.server.application.port.in.QueueUseCase.*;
 import kr.hhplus.be.server.application.port.out.QueuePort;
 import kr.hhplus.be.server.application.service.QueueService;
 import kr.hhplus.be.server.domain.queue.model.QueueToken;
-import kr.hhplus.be.server.infrastructure.persistence.queue.redis.RedisQueueAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,9 +20,6 @@ class QueueServiceTest {
 
     @Mock
     private QueuePort queuePort;
-
-    @Mock
-    private RedisQueueAdapter redisQueueAdapter;
 
     private QueueService queueService;
 
@@ -62,15 +58,14 @@ class QueueServiceTest {
     @DisplayName("토큰 발급 - 대기열 진입")
     void issueToken_Enter_WaitingQueue() {
         // given
-        QueueService serviceWithRedis = new QueueService(redisQueueAdapter);
         QueueToken expectedToken = new QueueToken(TOKEN_VALUE);
 
-        when(redisQueueAdapter.issue(USER_ID)).thenReturn(expectedToken);
-        when(redisQueueAdapter.isActive(TOKEN_VALUE)).thenReturn(false);
-        when(redisQueueAdapter.getWaitingPosition(TOKEN_VALUE)).thenReturn(5L);
+        when(queuePort.issue(USER_ID)).thenReturn(expectedToken);
+        when(queuePort.isActive(TOKEN_VALUE)).thenReturn(false);
+        when(queuePort.getWaitingPosition(TOKEN_VALUE)).thenReturn(5L);
 
         // when
-        TokenInfo result = serviceWithRedis.issueToken(new IssueTokenCommand(USER_ID));
+        TokenInfo result = queueService.issueToken(new IssueTokenCommand(USER_ID));
 
         // then
         assertThat(result.status()).isEqualTo("WAITING");
@@ -100,14 +95,12 @@ class QueueServiceTest {
     @DisplayName("토큰 정보 조회 - 대기 중인 토큰")
     void getTokenInfo_Waiting() {
         // given
-        QueueService serviceWithRedis = new QueueService(redisQueueAdapter);
-
-        when(redisQueueAdapter.isActive(TOKEN_VALUE)).thenReturn(false);
-        when(redisQueueAdapter.getWaitingPosition(TOKEN_VALUE)).thenReturn(3L);
-        when(redisQueueAdapter.userIdOf(TOKEN_VALUE)).thenReturn(USER_ID);
+        when(queuePort.isActive(TOKEN_VALUE)).thenReturn(false);
+        when(queuePort.getWaitingPosition(TOKEN_VALUE)).thenReturn(3L);
+        when(queuePort.userIdOf(TOKEN_VALUE)).thenReturn(USER_ID);
 
         // when
-        TokenInfo result = serviceWithRedis.getTokenInfo(TOKEN_VALUE);
+        TokenInfo result = queueService.getTokenInfo(TOKEN_VALUE);
 
         // then
         assertThat(result.status()).isEqualTo("WAITING");
@@ -119,13 +112,11 @@ class QueueServiceTest {
     @DisplayName("토큰 정보 조회 - 만료된 토큰")
     void getTokenInfo_Expired() {
         // given
-        QueueService serviceWithRedis = new QueueService(redisQueueAdapter);
-
-        when(redisQueueAdapter.isActive(TOKEN_VALUE)).thenReturn(false);
-        when(redisQueueAdapter.getWaitingPosition(TOKEN_VALUE)).thenReturn(null);
+        when(queuePort.isActive(TOKEN_VALUE)).thenReturn(false);
+        when(queuePort.getWaitingPosition(TOKEN_VALUE)).thenReturn(null);
 
         // when & then
-        assertThatThrownBy(() -> serviceWithRedis.getTokenInfo(TOKEN_VALUE))
+        assertThatThrownBy(() -> queueService.getTokenInfo(TOKEN_VALUE))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("유효하지 않거나 만료된 토큰입니다");
     }
@@ -170,32 +161,28 @@ class QueueServiceTest {
     @DisplayName("대기열 처리 - 슬롯 가용시 활성화")
     void processQueue_ActivatesWaitingUsers() {
         // given
-        QueueService serviceWithRedis = new QueueService(redisQueueAdapter);
-
-        when(redisQueueAdapter.getActiveCount()).thenReturn(95L);
+        when(queuePort.getActiveCount()).thenReturn(95L);
         // 100 - 95 = 5개 슬롯 가용
 
         // when
-        serviceWithRedis.processQueue();
+        queueService.processQueue();
 
         // then
-        verify(redisQueueAdapter).activateNextUsers(5);
+        verify(queuePort).activateNextUsers(5);
     }
 
     @Test
     @DisplayName("대기열 처리 - 슬롯 없을 때")
     void processQueue_NoAvailableSlots() {
         // given
-        QueueService serviceWithRedis = new QueueService(redisQueueAdapter);
-
-        when(redisQueueAdapter.getActiveCount()).thenReturn(100L);
+        when(queuePort.getActiveCount()).thenReturn(100L);
         // 가용 슬롯 없음
 
         // when
-        serviceWithRedis.processQueue();
+        queueService.processQueue();
 
         // then
-        verify(redisQueueAdapter, never()).activateNextUsers(anyInt());
+        verify(queuePort, never()).activateNextUsers(anyInt());
     }
 
     @Test
