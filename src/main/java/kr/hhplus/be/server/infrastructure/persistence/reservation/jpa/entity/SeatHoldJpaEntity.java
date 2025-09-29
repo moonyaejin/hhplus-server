@@ -28,7 +28,7 @@ public class SeatHoldJpaEntity {
     private Integer seatNumber;
 
     @Column(name = "user_id", nullable = false)
-    private String userId;  // UUID as String
+    private String userId;
 
     @Column(name = "held_at", nullable = false)
     private LocalDateTime heldAt;
@@ -52,14 +52,29 @@ public class SeatHoldJpaEntity {
         this.expiresAt = expiresAt;
     }
 
+    // 낙관적 락을 위한 업데이트 메서드 추가
+    public void updateHold(String newUserId, LocalDateTime newHeldAt, LocalDateTime newExpiresAt) {
+        this.userId = newUserId;
+        this.heldAt = newHeldAt;
+        this.expiresAt = newExpiresAt;
+        // version은 JPA가 자동으로 증가시킴
+    }
+
+    // Getter들
     public Long getId() { return id; }
     public Long getScheduleId() { return scheduleId; }
     public Integer getSeatNumber() { return seatNumber; }
     public String getUserId() { return userId; }
     public LocalDateTime getHeldAt() { return heldAt; }
     public LocalDateTime getExpiresAt() { return expiresAt; }
+    public Long getVersion() { return version; }  // version getter 추가
 
+    // 만료 체크 메서드 개선
     public boolean isExpired() {
-        return LocalDateTime.now().isAfter(expiresAt);
+        return isExpired(LocalDateTime.now());
+    }
+
+    public boolean isExpired(LocalDateTime at) {
+        return at.isAfter(expiresAt);
     }
 }

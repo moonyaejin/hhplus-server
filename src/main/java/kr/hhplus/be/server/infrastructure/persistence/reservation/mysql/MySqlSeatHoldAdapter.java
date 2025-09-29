@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,34 +26,83 @@ import java.util.*;
 public class MySqlSeatHoldAdapter implements SeatHoldPort {
 
     private final SeatHoldJpaRepository repository;
+    private static final int MAX_RETRY = 3;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean tryHold(SeatIdentifier seatIdentifier, UserId userId, Duration holdDuration) {
+        // 낙관적 락 재시도 로직 추가
+        int retryCount = 0;
+
+        while (retryCount < MAX_RETRY) {
+            try {
+                return attemptHold(seatIdentifier, userId, holdDuration);
+            } catch (ObjectOptimisticLockingFailureException e) {
+                // 낙관적 락 충돌 시 재시도
+                retryCount++;
+                log.warn("낙관적 락 충돌, 재시도 {}/{}: scheduleId={}, seatNo={}",
+                        retryCount, MAX_RETRY,
+                        seatIdentifier.scheduleId().value(),
+                        seatIdentifier.seatNumber().value());
+
+                if (retryCount >= MAX_RETRY) {
+                    log.error("최대 재시도 횟수 초과");
+                    return false;
+                }
+
+                // 짧은 대기 후 재시도 (exponential backoff)
+                try {
+                    Thread.sleep(50 * retryCount);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            } catch (Exception e) {
+                log.error("좌석 점유 중 예외 발생: scheduleId={}, seatNo={}",
+                        seatIdentifier.scheduleId().value(),
+                        seatIdentifier.seatNumber().value(), e);
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean attemptHold(SeatIdentifier seatIdentifier, UserId userId, Duration holdDuration) {
         Long scheduleId = seatIdentifier.scheduleId().value();
         Integer seatNumber = seatIdentifier.seatNumber().value();
+        LocalDateTime now = LocalDateTime.now();
 
         try {
-            // 기존 점유 확인
+            // 비관적 락으로 변경 - 이 부분만 수정!
             Optional<SeatHoldJpaEntity> existing = repository
-                    .findByScheduleIdAndSeatNumber(scheduleId, seatNumber);
+                    .findByScheduleIdAndSeatNumberWithLock(scheduleId, seatNumber);
 
             if (existing.isPresent()) {
                 SeatHoldJpaEntity existingHold = existing.get();
 
                 // 만료되지 않았으면 실패
-                if (!existingHold.isExpired()) {
-                    log.debug("좌석이 이미 점유 중: scheduleId={}, seatNo={}", scheduleId, seatNumber);
+                if (!existingHold.isExpired(now)) {
+                    log.debug("좌석이 이미 점유 중: scheduleId={}, seatNo={}, holder={}",
+                            scheduleId, seatNumber, existingHold.getUserId());
                     return false;
                 }
 
-                // 만료된 경우 ID로 삭제
-                repository.deleteById(existingHold.getId());
-                repository.flush(); // 즉시 반영
+                // 만료된 경우 업데이트 (이미 락을 잡은 상태라 안전!)
+                existingHold.updateHold(
+                        userId.asString(),
+                        now,
+                        now.plus(holdDuration)
+                );
+
+                repository.saveAndFlush(existingHold);
+
+                log.info("만료된 좌석 재점유 성공: scheduleId={}, seatNo={}, userId={}",
+                        scheduleId, seatNumber, userId.asString());
+                return true;
             }
 
-            // 새로운 점유 생성
-            LocalDateTime now = LocalDateTime.now();
+            // 신규 생성
             SeatHoldJpaEntity newHold = new SeatHoldJpaEntity(
                     scheduleId,
                     seatNumber,
@@ -61,20 +111,16 @@ public class MySqlSeatHoldAdapter implements SeatHoldPort {
                     now.plus(holdDuration)
             );
 
-            repository.save(newHold);
-            repository.flush(); // 즉시 반영
+            repository.saveAndFlush(newHold);
 
-            log.info("좌석 점유 성공: scheduleId={}, seatNo={}, userId={}",
+            log.info("좌석 신규 점유 성공: scheduleId={}, seatNo={}, userId={}",
                     scheduleId, seatNumber, userId.asString());
             return true;
 
         } catch (DataIntegrityViolationException e) {
-            // 동시성 이슈로 중복 발생
-            log.debug("좌석 점유 실패 - 동시 요청: scheduleId={}, seatNo={}", scheduleId, seatNumber);
+            log.debug("좌석 점유 실패 - 동시 요청으로 인한 중복: scheduleId={}, seatNo={}",
+                    scheduleId, seatNumber);
             return false;
-        } catch (Exception e) {
-            log.error("좌석 점유 중 예외 발생: scheduleId={}, seatNo={}", scheduleId, seatNumber, e);
-            throw new RuntimeException("좌석 점유 실패", e); // 예외를 던지지 말고 false 반환
         }
     }
 
@@ -94,10 +140,14 @@ public class MySqlSeatHoldAdapter implements SeatHoldPort {
     @Override
     @Transactional
     public void release(SeatIdentifier seatIdentifier) {
-        repository.deleteByScheduleIdAndSeatNumber(
+        repository.deleteByScheduleIdAndSeatNumber(  // 괄호 수정
                 seatIdentifier.scheduleId().value(),
                 seatIdentifier.seatNumber().value()
         );
+
+        log.debug("좌석 점유 해제: scheduleId={}, seatNo={}",
+                seatIdentifier.scheduleId().value(),
+                seatIdentifier.seatNumber().value());
     }
 
     @Override
@@ -146,7 +196,7 @@ public class MySqlSeatHoldAdapter implements SeatHoldPort {
             );
 
             for (SeatHoldJpaEntity hold : holds) {
-                if (!hold.isExpired()) {
+                if (!hold.isExpired(now)) {
                     SeatIdentifier seatId = SeatIdentifier.of(
                             hold.getScheduleId(),
                             hold.getSeatNumber()
@@ -166,12 +216,13 @@ public class MySqlSeatHoldAdapter implements SeatHoldPort {
         return resultMap;
     }
 
-    // 만료된 점유 정리
-    private void cleanupExpiredHolds() {
+    // 만료된 점유 정리 - 스케줄러에서 호출
+    @Transactional
+    public void cleanupExpiredHolds() {
         try {
             int deleted = repository.deleteExpiredHolds(LocalDateTime.now());
             if (deleted > 0) {
-                log.debug("만료된 좌석 점유 {}건 정리", deleted);
+                log.info("만료된 좌석 점유 {}건 정리 완료", deleted);
             }
         } catch (Exception e) {
             log.error("만료된 홀드 정리 실패", e);
