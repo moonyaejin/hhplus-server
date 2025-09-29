@@ -7,6 +7,7 @@ import kr.hhplus.be.server.domain.common.UserId;
 import kr.hhplus.be.server.domain.payment.Balance;
 import kr.hhplus.be.server.domain.payment.Wallet;
 import kr.hhplus.be.server.domain.payment.WalletId;
+import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -30,6 +32,9 @@ class PaymentServiceTest {
     @Mock
     private WalletPort walletPort;
 
+    @Mock
+    private UserWalletJpaRepository walletRepository;
+
     private PaymentService paymentService;
 
     private static final String USER_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -37,7 +42,9 @@ class PaymentServiceTest {
 
     @BeforeEach
     void setUp() {
-        paymentService = new PaymentService(walletPort);
+        paymentService = new PaymentService(walletPort, walletRepository);
+        // useConditionalUpdate를 false로 설정 (도메인 로직 방식 사용)
+        ReflectionTestUtils.setField(paymentService, "useConditionalUpdate", false);
     }
 
     @Test
@@ -135,7 +142,8 @@ class PaymentServiceTest {
         );
 
         when(walletPort.isIdempotencyKeyUsed(any(), eq(IDEMPOTENCY_KEY))).thenReturn(false);
-        when(walletPort.findByUserId(any())).thenReturn(Optional.of(wallet));
+        // payWithDomainLogic에서는 findByUserIdWithLock을 사용
+        when(walletPort.findByUserIdWithLock(any())).thenReturn(Optional.of(wallet));
 
         // when
         BalanceResult result = paymentService.pay(command);
@@ -177,7 +185,8 @@ class PaymentServiceTest {
         );
 
         when(walletPort.isIdempotencyKeyUsed(any(), eq(IDEMPOTENCY_KEY))).thenReturn(false);
-        when(walletPort.findByUserId(any())).thenReturn(Optional.of(wallet));
+        // payWithDomainLogic에서는 findByUserIdWithLock을 사용
+        when(walletPort.findByUserIdWithLock(any())).thenReturn(Optional.of(wallet));
 
         // when & then
         assertThatThrownBy(() -> paymentService.pay(command))
@@ -266,7 +275,8 @@ class PaymentServiceTest {
         );
 
         when(walletPort.isIdempotencyKeyUsed(any(), eq(IDEMPOTENCY_KEY))).thenReturn(false);
-        when(walletPort.findByUserId(any())).thenReturn(Optional.of(wallet));
+        // payWithDomainLogic에서는 findByUserIdWithLock을 사용
+        when(walletPort.findByUserIdWithLock(any())).thenReturn(Optional.of(wallet));
 
         // when & then
         assertThatThrownBy(() -> paymentService.pay(command))
@@ -275,5 +285,46 @@ class PaymentServiceTest {
 
         // 검증: 지갑 저장하지 않음
         verify(walletPort, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("조건부 UPDATE 방식 - 결제 성공")
+    void pay_ConditionalUpdate_Success() {
+        // given
+        // 조건부 UPDATE 방식 활성화
+        ReflectionTestUtils.setField(paymentService, "useConditionalUpdate", true);
+
+        PaymentCommand command = new PaymentCommand(USER_ID, 30_000L, IDEMPOTENCY_KEY);
+
+        when(walletPort.isIdempotencyKeyUsed(any(), eq(IDEMPOTENCY_KEY))).thenReturn(false);
+        when(walletRepository.decreaseBalance(any(), eq(30_000L))).thenReturn(1); // 성공
+        when(walletPort.balanceOf(USER_ID)).thenReturn(70_000L);
+
+        // when
+        BalanceResult result = paymentService.pay(command);
+
+        // then
+        assertThat(result.balance()).isEqualTo(70_000L);
+        verify(walletRepository).decreaseBalance(any(), eq(30_000L));
+        verify(walletPort).saveLedgerEntry(any(), eq(-30_000L), eq("PAYMENT"), eq(IDEMPOTENCY_KEY));
+    }
+
+    @Test
+    @DisplayName("조건부 UPDATE 방식 - 잔액 부족")
+    void pay_ConditionalUpdate_InsufficientBalance() {
+        // given
+        ReflectionTestUtils.setField(paymentService, "useConditionalUpdate", true);
+
+        PaymentCommand command = new PaymentCommand(USER_ID, 100_000L, IDEMPOTENCY_KEY);
+
+        when(walletPort.isIdempotencyKeyUsed(any(), eq(IDEMPOTENCY_KEY))).thenReturn(false);
+        when(walletRepository.decreaseBalance(any(), eq(100_000L))).thenReturn(0); // 실패
+        when(walletPort.balanceOf(USER_ID)).thenReturn(30_000L);
+
+        // when & then
+        assertThatThrownBy(() -> paymentService.pay(command))
+                .hasMessageContaining("잔액이 부족합니다");
+
+        verify(walletPort, never()).saveLedgerEntry(any(), anyLong(), any(), any());
     }
 }
