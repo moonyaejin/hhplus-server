@@ -78,3 +78,5 @@ app:
     cleanup:
       enabled: false
       interval-ms: 300000
+  payment:
+    use-conditional-update: false  # 기본값: 도메인 로직 방식
