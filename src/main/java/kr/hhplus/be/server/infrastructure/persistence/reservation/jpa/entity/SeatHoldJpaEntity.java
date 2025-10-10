@@ -28,7 +28,7 @@ public class SeatHoldJpaEntity {
     private Integer seatNumber;
 
     @Column(name = "user_id", nullable = false)
-    private String userId;
+    private String userId;  // UUID as String
 
     @Column(name = "held_at", nullable = false)
     private LocalDateTime heldAt;

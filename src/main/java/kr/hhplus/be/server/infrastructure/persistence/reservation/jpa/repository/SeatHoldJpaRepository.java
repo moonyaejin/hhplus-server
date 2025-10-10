@@ -37,7 +37,7 @@ public interface SeatHoldJpaRepository extends JpaRepository<SeatHoldJpaEntity, 
     @Query("DELETE FROM SeatHoldJpaEntity s WHERE s.expiresAt < :now")
     int deleteExpiredHolds(@Param("now") LocalDateTime now);
 
-    // 특정 좌석의 만료된 홀드 삭제 (기존에 있던 메서드)
+    // 특정 좌석의 만료된 홀드 삭제
     @Modifying
     @Query("DELETE FROM SeatHoldJpaEntity s " +
             "WHERE s.scheduleId = :scheduleId " +

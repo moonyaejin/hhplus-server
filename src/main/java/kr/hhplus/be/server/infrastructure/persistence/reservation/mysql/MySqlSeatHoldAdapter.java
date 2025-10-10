@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -24,7 +23,7 @@ import java.util.*;
 public class MySqlSeatHoldAdapter implements SeatHoldPort {
 
     private final SeatHoldJpaRepository repository;
-    private final SeatHoldTransactionService transactionService;  // 추가
+    private final SeatHoldTransactionService transactionService;
 
     @Override
     public boolean tryHold(SeatIdentifier seatIdentifier, UserId userId, Duration holdDuration) {
