@@ -50,4 +50,11 @@ public interface QueueTokenJpaRepository extends JpaRepository<QueueTokenJpaEnti
             "WHERE t.status = 'WAITING' " +
             "ORDER BY t.issuedAt ASC")
     List<QueueTokenJpaEntity> findAllWaitingTokens();
+
+    // 오래된 만료/사용 토큰 삭제 - expiresAt 기준으로 수정
+    @Modifying
+    @Query("DELETE FROM QueueTokenJpaEntity q " +
+            "WHERE q.status IN ('EXPIRED', 'USED') " +
+            "AND q.expiresAt < :before")
+    int deleteOldExpiredTokens(@Param("before") LocalDateTime before);
 }

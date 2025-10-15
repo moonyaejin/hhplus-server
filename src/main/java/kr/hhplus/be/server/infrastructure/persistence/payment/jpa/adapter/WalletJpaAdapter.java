@@ -37,6 +37,13 @@ public class WalletJpaAdapter implements WalletPort {
                 .map(this::toDomainWallet);
     }
 
+    // 비관적 락 사용
+    @Override
+    public Optional<Wallet> findByUserIdWithLock(UserId userId) {
+        return walletRepo.findForUpdate(userId.asUUID())  // SELECT FOR UPDATE
+                .map(this::toDomainWallet);
+    }
+
     @Override
     public long balanceOf(String userId) {
         UUID uid = UUID.fromString(userId);

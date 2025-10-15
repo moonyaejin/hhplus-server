@@ -15,6 +15,8 @@ public interface WalletPort {
     Optional<Wallet> findByUserId(UserId userId);
     long balanceOf(String userId);
 
+    Optional<Wallet> findByUserIdWithLock(UserId userId);
+
     // 저장
     void save(Wallet wallet);
 

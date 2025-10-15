@@ -2,6 +2,12 @@ spring:
   datasource:
     driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
     url: jdbc:tc:mysql:8.0:///hhplus
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 20
+      connection-timeout: 5000
+      validation-timeout: 3000
+      auto-commit: false
 
   jpa:
     hibernate:
@@ -10,6 +16,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        connection:
+          isolation: 2
+        jdbc:
+          batch_size: 0
 
   flyway:
     enabled: false
@@ -17,3 +27,5 @@ spring:
 logging:
   level:
     kr.hhplus.be.server: DEBUG
+    org.springframework.transaction: DEBUG
+    org.hibernate.SQL: DEBUG

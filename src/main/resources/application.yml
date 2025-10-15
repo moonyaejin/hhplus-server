@@ -78,3 +78,5 @@ app:
     cleanup:
       enabled: false
       interval-ms: 300000
+  payment:
+    use-conditional-update: false
