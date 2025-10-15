@@ -1,7 +1,10 @@
 package kr.hhplus.be.server.concurrency;
 
+import kr.hhplus.be.server.concurrency.config.TestTaskExecutorConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,6 +14,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - DB 레벨 조건부 UPDATE (WHERE balance >= amount)
  * - 단일 쿼리로 원자적 처리
  */
+
+@SpringBootTest
+@Import(TestTaskExecutorConfig.class)
 @TestPropertySource(properties = {
         "app.payment.use-conditional-update=true"
 })

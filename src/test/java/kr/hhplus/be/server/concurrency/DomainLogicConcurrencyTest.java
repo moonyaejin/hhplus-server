@@ -1,7 +1,10 @@
 package kr.hhplus.be.server.concurrency;
 
+import kr.hhplus.be.server.concurrency.config.TestTaskExecutorConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,6 +14,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - 비관적 락(SELECT FOR UPDATE) 또는 낙관적 락(@Version) 사용
  * - PaymentService의 기본 동작 방식
  */
+
+@SpringBootTest
+@Import(TestTaskExecutorConfig.class)
 @TestPropertySource(properties = {
         "app.payment.use-conditional-update=false"
 })
