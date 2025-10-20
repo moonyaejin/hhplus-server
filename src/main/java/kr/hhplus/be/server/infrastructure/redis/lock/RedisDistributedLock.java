@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.infrastructure.redis.lock;
 
+import kr.hhplus.be.server.domain.reservation.SeatIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -19,7 +20,13 @@ import java.util.function.Supplier;
  */
 @Component
 public class RedisDistributedLock {
+    private static final String LOCK_PREFIX = "lock:reservation:seat:";
 
+    public static String buildSeatLockKey(SeatIdentifier seatIdentifier) {
+        return LOCK_PREFIX +
+                seatIdentifier.scheduleId().value() + ":" +
+                seatIdentifier.seatNumber().value();
+    }
     private static final Logger log = LoggerFactory.getLogger(RedisDistributedLock.class);
 
     private final RedisTemplate<String, String> redisTemplate;
