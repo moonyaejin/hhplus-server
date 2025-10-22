@@ -1,40 +1,73 @@
 package kr.hhplus.be.server.application.service;
 
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
-import kr.hhplus.be.server.application.port.out.WalletPort;
+import kr.hhplus.be.server.application.port.out.WalletPort;  // 인터페이스 사용
 import kr.hhplus.be.server.domain.common.UserId;
-import kr.hhplus.be.server.domain.payment.InsufficientBalanceException;
 import kr.hhplus.be.server.domain.payment.Wallet;
-import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletJpaRepository;
+import kr.hhplus.be.server.infrastructure.redis.lock.RedisDistributedLock;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-@Slf4j
+/**
+ * 결제 애플리케이션 서비스
+ * - 도메인 로직 조율
+ * - 트랜잭션 경계 관리
+ * - 멱등성 보장
+ *
+ * [분산락 적용 포인트]
+ * 1. charge: 사용자별 락 (동시 충전 방지)
+ * 2. pay: 사용자별 락 (동시 결제 방지)
+ *
+ * [트랜잭션 제어]
+ * - 클래스 레벨 @Transactional 제거 (수동 제어)
+ * - TransactionTemplate으로 락 안에서 트랜잭션 시작
+ * - 순서: 락 획득 → 트랜잭션 시작 → 작업 → 트랜잭션 커밋 → 락 해제
+ */
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class PaymentService implements PaymentUseCase {
 
-    private final WalletPort walletPort;
-    private final UserWalletJpaRepository walletRepository;
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
-    // 조건부 UPDATE 사용 여부를 설정으로 관리
-    @Value("${app.payment.use-conditional-update:false}")
-    private boolean useConditionalUpdate;
+    private final WalletPort walletPort;  // 인터페이스에 의존 (DIP 원칙)
+    private final RedisDistributedLock distributedLock;
+    private final TransactionTemplate transactionTemplate;
 
+    /**
+     * 포인트 충전
+     * - 분산락: lock:charge:user:{userId}
+     * - 범위: 사용자별 충전 직렬화
+     */
     @Override
     public BalanceResult charge(ChargeCommand command) {
+        // 멱등성 체크 (락/트랜잭션 불필요)
         UserId userId = UserId.ofString(command.userId());
-
-        // 1. 멱등성 체크
         if (walletPort.isIdempotencyKeyUsed(userId, command.idempotencyKey())) {
             long currentBalance = walletPort.balanceOf(command.userId());
             return new BalanceResult(currentBalance);
         }
 
+        // 분산락 → 트랜잭션 순서로 실행
+        String lockKey = "lock:charge:user:" + command.userId();
+
+        return distributedLock.executeWithLock(
+                lockKey,
+                10L,        // TTL: 10초
+                3,          // 최대 3번 재시도
+                100L,       // 100ms 대기 후 재시도
+                () -> transactionTemplate.execute(status ->
+                        executeCharge(command, userId)
+                )
+        );
+    }
+
+    /**
+     * 포인트 충전 실제 로직 (분산락 + 트랜잭션 내부)
+     */
+    private BalanceResult executeCharge(ChargeCommand command, UserId userId) {
         // 2. 지갑 조회
         Wallet wallet = walletPort.findByUserId(userId)
                 .orElseThrow(() -> new IllegalStateException("지갑을 찾을 수 없습니다: " + command.userId()));
@@ -49,83 +82,53 @@ public class PaymentService implements PaymentUseCase {
         return new BalanceResult(wallet.getBalance().amount());
     }
 
+    /**
+     * 결제 처리
+     * - 분산락: lock:payment:user:{userId}
+     * - 범위: 사용자별 결제 직렬화
+     */
     @Override
     public BalanceResult pay(PaymentCommand command) {
+        // 1. 멱등성 체크 (락/트랜잭션 불필요)
         UserId userId = UserId.ofString(command.userId());
-
-        // 1. 멱등성 체크
         if (walletPort.isIdempotencyKeyUsed(userId, command.idempotencyKey())) {
             long currentBalance = walletPort.balanceOf(command.userId());
             return new BalanceResult(currentBalance);
         }
 
-        // 2. 설정에 따라 동시성 제어 방식 선택
-        if (useConditionalUpdate) {
-            log.debug("조건부 UPDATE 방식으로 결제 처리: userId={}", command.userId());
-            return payWithConditionalUpdate(command);
-        } else {
-            log.debug("도메인 로직 방식으로 결제 처리: userId={}", command.userId());
-            return payWithDomainLogic(command);
-        }
+        // 2. 분산락 → 트랜잭션 순서로 실행
+        String lockKey = "lock:payment:user:" + command.userId();
+
+        return distributedLock.executeWithLock(
+                lockKey,
+                10L,        // TTL: 10초
+                3,          // 최대 3번 재시도
+                100L,       // 100ms 대기 후 재시도
+                () -> transactionTemplate.execute(status ->
+                        executePay(command, userId)
+                )
+        );
     }
 
     /**
-     * 기존 방식: 도메인 객체를 통한 결제 처리
-     * - SELECT + 도메인 로직 + UPDATE
-     * - 비관적 락(findForUpdate) 또는 낙관적 락(@Version) 사용
+     * 결제 처리 실제 로직 (분산락 + 트랜잭션 내부)
      */
-    private BalanceResult payWithDomainLogic(PaymentCommand command) {
-        UserId userId = UserId.ofString(command.userId());
-
-        // 비관적 락으로 지갑 조회
-        Wallet wallet = walletPort.findByUserIdWithLock(userId)  // ← 변경
+    private BalanceResult executePay(PaymentCommand command, UserId userId) {
+        // 2. 지갑 조회
+        Wallet wallet = walletPort.findByUserId(userId)
                 .orElseThrow(() -> new IllegalStateException("지갑을 찾을 수 없습니다: " + command.userId()));
 
-        // 도메인 로직 실행 (잔액 검증 포함)
+        // 3. 도메인 로직 실행
         wallet.pay(command.amount(), command.idempotencyKey());
 
-        // 변경사항 저장
+        // 4. 변경사항 저장
         walletPort.save(wallet);
         walletPort.saveLedgerEntry(userId, -command.amount(), "PAYMENT", command.idempotencyKey());
 
         return new BalanceResult(wallet.getBalance().amount());
     }
 
-    /**
-     * 개선 방식: 조건부 UPDATE를 통한 결제 처리
-     * - 단일 쿼리로 원자적 차감 (WHERE balance >= amount)
-     * - DB 레벨에서 동시성 제어
-     * - 음수 잔액 원천 차단
-     */
-    private BalanceResult payWithConditionalUpdate(PaymentCommand command) {
-        UserId userId = UserId.ofString(command.userId());
-
-        // 조건부 UPDATE로 차감 (원자적 연산)
-        int updatedRows = walletRepository.decreaseBalance(
-                userId.asUUID(),
-                command.amount()
-        );
-
-        // UPDATE 실패 = 잔액 부족
-        if (updatedRows == 0) {
-            long currentBalance = walletPort.balanceOf(command.userId());
-            throw InsufficientBalanceException.of(command.amount(), currentBalance);
-        }
-
-        // 원장 기록
-        walletPort.saveLedgerEntry(userId, -command.amount(), "PAYMENT", command.idempotencyKey());
-
-        // 현재 잔액 조회 후 반환
-        long currentBalance = walletPort.balanceOf(command.userId());
-
-        log.info("결제 성공(조건부UPDATE): userId={}, amount={}, remainingBalance={}",
-                command.userId(), command.amount(), currentBalance);
-
-        return new BalanceResult(currentBalance);
-    }
-
     @Override
-    @Transactional(readOnly = true)
     public BalanceResult getBalance(BalanceQuery query) {
         long balance = walletPort.balanceOf(query.userId());
         return new BalanceResult(balance);
