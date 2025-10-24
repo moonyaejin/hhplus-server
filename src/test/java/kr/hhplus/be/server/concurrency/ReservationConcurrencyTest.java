@@ -210,7 +210,7 @@ class ReservationConcurrencyTest {
 
                     TemporaryAssignResult result = reservationService.temporaryAssign(command);
                     results.put(seatNumber, result.reservationId());
-                    System.out.println("✅ Seat-" + seatNumber + " 예약 성공");
+                    System.out.println("Seat-" + seatNumber + " 예약 성공");
 
                 } catch (Exception e) {
                     // 예상치 못한 예외는 로그 출력

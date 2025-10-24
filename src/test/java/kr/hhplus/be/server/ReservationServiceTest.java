@@ -39,8 +39,8 @@ class ReservationServiceTest {
     @Mock private ConcertSchedulePort concertSchedulePort;
     @Mock private ReservationDomainService domainService;
     @Mock private SeatHoldPort seatHoldPort;
-    @Mock private RedisDistributedLock distributedLock;  // ✅ 추가
-    @Mock private TransactionTemplate transactionTemplate;  // ✅ 추가
+    @Mock private RedisDistributedLock distributedLock;
+    @Mock private TransactionTemplate transactionTemplate;
 
     private ReservationService reservationService;
 
@@ -58,11 +58,11 @@ class ReservationServiceTest {
                 concertSchedulePort,
                 domainService,
                 seatHoldPort,
-                distributedLock,       // ✅ 추가
-                transactionTemplate    // ✅ 추가
+                distributedLock,
+                transactionTemplate
         );
 
-        // ✅ 분산락과 트랜잭션 Mock 동작 설정
+        // 분산락과 트랜잭션 Mock 동작 설정
         // executeWithLock은 전달받은 람다를 그냥 실행
         when(distributedLock.executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any()))
                 .thenAnswer(invocation -> {
