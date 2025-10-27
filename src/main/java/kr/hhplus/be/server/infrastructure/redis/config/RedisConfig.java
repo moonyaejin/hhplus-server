@@ -24,7 +24,7 @@ public class RedisConfig {
     }
 
     @Bean
-    public RedisTemplate<String, String> redisTemplate(RedisConnectionFactory connectionFactory) {
+    public RedisTemplate<String, String> redㄴisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, String> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
         template.setKeySerializer(new StringRedisSerializer());
@@ -36,9 +36,8 @@ public class RedisConfig {
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        // JdkSerializationRedisSerializer 사용 (Java record 완벽 지원)
-        RedisCacheConfiguration cacheConfig = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(10))
+        // 기본 캐시 설정
+        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .disableCachingNullValues()
                 .serializeKeysWith(
                         RedisSerializationContext.SerializationPair.fromSerializer(
@@ -51,8 +50,20 @@ public class RedisConfig {
                         )
                 );
 
+        // 콘서트 목록 캐시 설정: 1일 TTL
+        RedisCacheConfiguration concertsConfig = defaultConfig.entryTtl(Duration.ofDays(1));
+
+        // 콘서트 상세 캐시 설정: 1일 TTL
+        RedisCacheConfiguration concertDetailConfig = defaultConfig.entryTtl(Duration.ofDays(1));
+
+        // 스케줄 캐시 설정: 1분 TTL
+        RedisCacheConfiguration scheduleConfig = defaultConfig.entryTtl(Duration.ofMinutes(1));
+
         return RedisCacheManager.builder(connectionFactory)
-                .cacheDefaults(cacheConfig)
+                .cacheDefaults(defaultConfig.entryTtl(Duration.ofMinutes(10)))
+                .withCacheConfiguration("concerts", concertsConfig)
+                .withCacheConfiguration("concertDetail", concertDetailConfig)
+                .withCacheConfiguration("schedule", scheduleConfig)
                 .build();
     }
 }
