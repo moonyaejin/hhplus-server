@@ -4,18 +4,16 @@ import kr.hhplus.be.server.domain.reservation.SeatIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
  * Redis 기반 분산락 구현
  * - SETNX를 이용한 락 획득
- * - Lua Script를 이용한 안전한 락 해제
+ * - 락 소유권 확인 후 안전한 락 해제
  * - Retry 로직 포함
  */
 @Component
@@ -30,14 +28,6 @@ public class RedisDistributedLock {
     private static final Logger log = LoggerFactory.getLogger(RedisDistributedLock.class);
 
     private final RedisTemplate<String, String> redisTemplate;
-
-    // Lua Script: 내 락인지 확인 후 삭제 (원자적 실행)
-    private static final String UNLOCK_SCRIPT =
-            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
-                    "    return redis.call('del', KEYS[1]) " +
-                    "else " +
-                    "    return 0 " +
-                    "end";
 
     public RedisDistributedLock(RedisTemplate<String, String> redisTemplate) {
         this.redisTemplate = redisTemplate;
@@ -105,20 +95,23 @@ public class RedisDistributedLock {
     }
 
     /**
-     * 락 해제 (Lua Script 사용)
+     * 락 해제 (소유권 확인 후 삭제)
      *
      * @param key 락 키
      * @param value 락 값 (내 락인지 확인용)
      * @return 해제 성공 여부
      */
     public boolean unlock(String key, String value) {
-        RedisScript<Long> script = RedisScript.of(UNLOCK_SCRIPT, Long.class);
-        Long result = redisTemplate.execute(
-                script,
-                Collections.singletonList(key),
-                value
-        );
-        return Long.valueOf(1L).equals(result);
+        String currentValue = redisTemplate.opsForValue().get(key);
+
+        // 내 락인지 확인 후 삭제
+        if (value.equals(currentValue)) {
+            redisTemplate.delete(key);
+            return true;
+        }
+
+        // 이미 만료되었거나 다른 소유자
+        return false;
     }
 
     private void sleep(long millis) {
