@@ -21,10 +21,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 1. charge: 사용자별 락 (동시 충전 방지)
  * 2. pay: 사용자별 락 (동시 결제 방지)
  *
- * [트랜잭션 제어]
- * - 클래스 레벨 @Transactional 제거 (수동 제어)
- * - TransactionTemplate으로 락 안에서 트랜잭션 시작
- * - 순서: 락 획득 → 트랜잭션 시작 → 작업 → 트랜잭션 커밋 → 락 해제
+ * [실행 순서]
+ * - 락 획득 → 멱등성 체크 → 트랜잭션 시작 → 작업 → 트랜잭션 커밋 → 락 해제
+ * - 멱등성 체크를 락 안에서 수행하여 동시 요청 시 일관성 보장
  */
 @Service
 @RequiredArgsConstructor
@@ -40,27 +39,31 @@ public class PaymentService implements PaymentUseCase {
      * 포인트 충전
      * - 분산락: lock:charge:user:{userId}
      * - 범위: 사용자별 충전 직렬화
+     * - 순서: 락 획득 → 멱등성 체크 → 트랜잭션 실행
      */
     @Override
     public BalanceResult charge(ChargeCommand command) {
-        // 멱등성 체크 (락/트랜잭션 불필요)
         UserId userId = UserId.ofString(command.userId());
-        if (walletPort.isIdempotencyKeyUsed(userId, command.idempotencyKey())) {
-            long currentBalance = walletPort.balanceOf(command.userId());
-            return new BalanceResult(currentBalance);
-        }
-
-        // 분산락 → 트랜잭션 순서로 실행
         String lockKey = "lock:charge:user:" + command.userId();
 
+        // 락 먼저 획득
         return distributedLock.executeWithLock(
                 lockKey,
                 10L,        // TTL: 10초
                 3,          // 최대 3번 재시도
                 100L,       // 100ms 대기 후 재시도
-                () -> transactionTemplate.execute(status ->
-                        executeCharge(command, userId)
-                )
+                () -> {
+                    // 락 안에서 멱등성 체크 (동시 요청 시 일관성 보장)
+                    if (walletPort.isIdempotencyKeyUsed(userId, command.idempotencyKey())) {
+                        long currentBalance = walletPort.balanceOf(command.userId());
+                        return new BalanceResult(currentBalance);
+                    }
+
+                    // 트랜잭션 실행
+                    return transactionTemplate.execute(status ->
+                            executeCharge(command, userId)
+                    );
+                }
         );
     }
 
@@ -86,27 +89,31 @@ public class PaymentService implements PaymentUseCase {
      * 결제 처리
      * - 분산락: lock:payment:user:{userId}
      * - 범위: 사용자별 결제 직렬화
+     * - 순서: 락 획득 → 멱등성 체크 → 트랜잭션 실행
      */
     @Override
     public BalanceResult pay(PaymentCommand command) {
-        // 1. 멱등성 체크 (락/트랜잭션 불필요)
         UserId userId = UserId.ofString(command.userId());
-        if (walletPort.isIdempotencyKeyUsed(userId, command.idempotencyKey())) {
-            long currentBalance = walletPort.balanceOf(command.userId());
-            return new BalanceResult(currentBalance);
-        }
-
-        // 2. 분산락 → 트랜잭션 순서로 실행
         String lockKey = "lock:payment:user:" + command.userId();
 
+        // 락 먼저 획득
         return distributedLock.executeWithLock(
                 lockKey,
                 10L,        // TTL: 10초
                 3,          // 최대 3번 재시도
                 100L,       // 100ms 대기 후 재시도
-                () -> transactionTemplate.execute(status ->
-                        executePay(command, userId)
-                )
+                () -> {
+                    // 락 안에서 멱등성 체크 (동시 요청 시 일관성 보장)
+                    if (walletPort.isIdempotencyKeyUsed(userId, command.idempotencyKey())) {
+                        long currentBalance = walletPort.balanceOf(command.userId());
+                        return new BalanceResult(currentBalance);
+                    }
+
+                    // 트랜잭션 실행
+                    return transactionTemplate.execute(status ->
+                            executePay(command, userId)
+                    );
+                }
         );
     }
 
