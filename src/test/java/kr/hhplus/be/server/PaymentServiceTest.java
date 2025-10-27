@@ -172,11 +172,21 @@ class PaymentServiceTest {
 
     /**
      * 멱등성 체크로 인한 Early Return 테스트
-     * - 분산락을 사용하지 않음
+     * - 락 안에서 멱등성 체크 후 early return
      */
     @Nested
     @DisplayName("멱등성 체크 (분산락 미사용)")
     class IdempotencyCheck {
+
+        @BeforeEach
+        void setUpLockMocks() {
+            // 멱등성 체크도 락 안에서
+            when(distributedLock.executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any()))
+                    .thenAnswer(invocation -> {
+                        var supplier = invocation.getArgument(4, java.util.function.Supplier.class);
+                        return supplier.get();
+                    });
+        }
 
         @Test
         @DisplayName("포인트 충전 - 멱등성 보장")
@@ -195,9 +205,9 @@ class PaymentServiceTest {
             verify(walletPort, never()).save(any());
             verify(walletPort, never()).saveLedgerEntry(any(), anyLong(), any(), any());
 
-            // 분산락이 호출되지 않음을 명시적으로 검증
-            verifyNoInteractions(distributedLock);
-            verifyNoInteractions(transactionTemplate);
+            // 락은 사용되지만, 멱등성 체크로 인해 실제 작업은 수행되지 않음
+            verify(distributedLock).executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any());
+            verifyNoInteractions(transactionTemplate);  // 트랜잭션은 시작되지 않음
         }
 
         @Test
@@ -216,9 +226,9 @@ class PaymentServiceTest {
             assertThat(result.balance()).isEqualTo(70_000L);
             verify(walletPort, never()).save(any());
 
-            // 분산락이 호출되지 않음을 명시적으로 검증
-            verifyNoInteractions(distributedLock);
-            verifyNoInteractions(transactionTemplate);
+            // 락은 사용되지만, 멱등성 체크로 인해 실제 작업은 수행되지 않음
+            verify(distributedLock).executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any());
+            verifyNoInteractions(transactionTemplate);  // 트랜잭션은 시작되지 않음
         }
     }
 

@@ -63,15 +63,14 @@ class ReservationServiceTest {
         );
 
         // 분산락과 트랜잭션 Mock 동작 설정
-        // executeWithLock은 전달받은 람다를 그냥 실행
-        when(distributedLock.executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any()))
+        // lenient()를 사용하여 사용되지 않아도 에러가 발생하지 않도록 함
+        lenient().when(distributedLock.executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any()))
                 .thenAnswer(invocation -> {
                     var supplier = invocation.getArgument(4, java.util.function.Supplier.class);
                     return supplier.get();
                 });
 
-        // transactionTemplate.execute도 전달받은 람다를 그냥 실행
-        when(transactionTemplate.execute(any()))
+        lenient().when(transactionTemplate.execute(any()))
                 .thenAnswer(invocation -> {
                     var callback = invocation.getArgument(0, org.springframework.transaction.support.TransactionCallback.class);
                     return callback.doInTransaction(null);
