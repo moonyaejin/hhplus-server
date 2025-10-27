@@ -8,6 +8,8 @@ import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository
 import kr.hhplus.be.server.web.concert.dto.ConcertDto;
 import kr.hhplus.be.server.web.concert.dto.ScheduleDto;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class ConcertService {
     /**
      * 전체 콘서트 목록 조회
      */
+    @Cacheable(value = "concerts")
     public List<ConcertDto> getAllConcerts() {
         List<ConcertJpaEntity> entities = concertJpaRepository.findAll();
 
@@ -54,6 +57,7 @@ public class ConcertService {
     /**
      * 특정 콘서트의 특정 날짜 스케줄 조회
      */
+    @Cacheable(value = "schedule", key = "#concertId + ':' + #date")
     public ScheduleDto getConcertSchedule(Long concertId, LocalDate date) {
         // 스케줄 조회
         ConcertScheduleJpaEntity schedule = scheduleJpaRepository
@@ -82,6 +86,7 @@ public class ConcertService {
     /**
      * 특정 콘서트 상세 조회
      */
+    @Cacheable(value = "concertDetail", key = "#concertId")
     public ConcertDto getConcertDetail(Long concertId) {
         ConcertJpaEntity entity = concertJpaRepository.findById(concertId)
                 .orElseThrow(() -> new RuntimeException("콘서트를 찾을 수 없습니다"));
@@ -91,5 +96,29 @@ public class ConcertService {
                 entity.getTitle(),
                 "상세 설명"
         );
+    }
+
+    /**
+     * 콘서트 목록 캐시 무효화 (테스트용)
+     */
+    @CacheEvict(value = "concerts", allEntries = true)
+    public void evictConcertCache() {
+        // 캐시 무효화만 수행
+    }
+
+    /**
+     * 특정 스케줄 캐시 무효화 (테스트용)
+     */
+    @CacheEvict(value = "schedule", key = "#concertId + ':' + #date")
+    public void evictScheduleCache(Long concertId, LocalDate date) {
+        // 캐시 무효화만 수행
+    }
+
+    /**
+     * 콘서트 상세 캐시 무효화 (테스트용)
+     */
+    @CacheEvict(value = "concertDetail", key = "#concertId")
+    public void evictConcertDetailCache(Long concertId) {
+        // 캐시 무효화만 수행
     }
 }

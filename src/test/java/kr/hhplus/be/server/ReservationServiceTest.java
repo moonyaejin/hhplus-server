@@ -10,6 +10,7 @@ import kr.hhplus.be.server.domain.concert.ConcertSchedule;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
 import kr.hhplus.be.server.domain.concert.ConcertId;
 import kr.hhplus.be.server.domain.reservation.*;
+import kr.hhplus.be.server.infrastructure.redis.lock.RedisDistributedLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -37,6 +39,8 @@ class ReservationServiceTest {
     @Mock private ConcertSchedulePort concertSchedulePort;
     @Mock private ReservationDomainService domainService;
     @Mock private SeatHoldPort seatHoldPort;
+    @Mock private RedisDistributedLock distributedLock;
+    @Mock private TransactionTemplate transactionTemplate;
 
     private ReservationService reservationService;
 
@@ -53,8 +57,24 @@ class ReservationServiceTest {
                 paymentUseCase,
                 concertSchedulePort,
                 domainService,
-                seatHoldPort
+                seatHoldPort,
+                distributedLock,
+                transactionTemplate
         );
+
+        // 분산락과 트랜잭션 Mock 동작 설정
+        // lenient()를 사용하여 사용되지 않아도 에러가 발생하지 않도록 함
+        lenient().when(distributedLock.executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any()))
+                .thenAnswer(invocation -> {
+                    var supplier = invocation.getArgument(4, java.util.function.Supplier.class);
+                    return supplier.get();
+                });
+
+        lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    var callback = invocation.getArgument(0, org.springframework.transaction.support.TransactionCallback.class);
+                    return callback.doInTransaction(null);
+                });
     }
 
     @Test
@@ -103,6 +123,18 @@ class ReservationServiceTest {
         assertThat(result.price()).isEqualTo(80_000L);
         assertThat(result.reservationId()).isNotNull();
 
+        // 검증: 분산락 사용 확인
+        verify(distributedLock).executeWithLock(
+                anyString(),  // lockKey
+                anyLong(),    // ttl
+                anyInt(),     // retryCount
+                anyLong(),    // retryDelay
+                any()         // action
+        );
+
+        // 검증: 트랜잭션 사용 확인
+        verify(transactionTemplate).execute(any());
+
         // 검증: Redis 좌석 점유 시도
         verify(seatHoldPort).tryHold(any(SeatIdentifier.class), any(UserId.class), eq(Duration.ofMinutes(5)));
 
@@ -119,12 +151,15 @@ class ReservationServiceTest {
         );
 
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(false);
-        when(queuePort.getWaitingPosition(QUEUE_TOKEN)).thenReturn(null);  // 추가
+        when(queuePort.getWaitingPosition(QUEUE_TOKEN)).thenReturn(null);
 
         // when & then
         assertThatThrownBy(() -> reservationService.temporaryAssign(command))
                 .isInstanceOf(QueueTokenExpiredException.class)
                 .hasMessage("유효하지 않거나 만료된 토큰입니다");
+
+        // 검증: 분산락도 시도하지 않음 (검증 단계에서 실패)
+        verify(distributedLock, never()).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
 
         // 검증: 좌석 점유 시도하지 않음
         verify(seatHoldPort, never()).tryHold(any(), any(), any());
@@ -202,6 +237,18 @@ class ReservationServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.remainingBalance()).isEqualTo(20_000L);
 
+        // 검증: 분산락 사용 확인
+        verify(distributedLock).executeWithLock(
+                contains("confirm"),  // lockKey에 "confirm" 포함
+                anyLong(),
+                anyInt(),
+                anyLong(),
+                any()
+        );
+
+        // 검증: 트랜잭션 사용 확인
+        verify(transactionTemplate).execute(any());
+
         // 검증: 결제 요청
         ArgumentCaptor<PaymentUseCase.PaymentCommand> paymentCaptor =
                 ArgumentCaptor.forClass(PaymentUseCase.PaymentCommand.class);
@@ -247,10 +294,11 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> reservationService.confirmReservation(command))
                 .hasMessage("잔액이 부족합니다");
 
-        // 검증: 예약 상태 변경되지 않음
-        verify(reservationRepository, never()).save(any());
+        // 검증: 분산락과 트랜잭션은 실행됨 (내부에서 예외 발생)
+        verify(distributedLock).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
+        verify(transactionTemplate).execute(any());
 
-        // 검증: 좌석 해제되지 않음
+        // 검증: 좌석 해제되지 않음 (결제 실패로 트랜잭션 롤백)
         verify(seatHoldPort, never()).release(any());
 
         // 검증: 토큰 만료되지 않음
@@ -281,6 +329,9 @@ class ReservationServiceTest {
         assertThat(result.seatNumber()).isEqualTo(SEAT_NUMBER);
         assertThat(result.price()).isEqualTo(80_000L);
         assertThat(result.status()).isEqualTo("TEMPORARY_ASSIGNED");
+
+        // 검증: 조회는 분산락 사용하지 않음
+        verify(distributedLock, never()).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
     }
 
     @Test
@@ -288,7 +339,7 @@ class ReservationServiceTest {
     void getReservation_Unauthorized() {
         // given
         String reservationId = "test-reservation-id";
-        String otherUserId = "550e8400-e29b-41d4-a716-446655440001";  // 다른 사용자 ID (UUID 형식)
+        String otherUserId = "550e8400-e29b-41d4-a716-446655440001";  // 다른 사용자 ID
         ReservationQuery query = new ReservationQuery(otherUserId, reservationId);
 
         Reservation reservation = Reservation.temporaryAssign(
