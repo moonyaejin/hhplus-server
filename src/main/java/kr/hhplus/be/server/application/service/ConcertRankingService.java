@@ -6,13 +6,12 @@ import kr.hhplus.be.server.domain.concert.ConcertSchedule;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -23,8 +22,7 @@ public class ConcertRankingService implements RankingUseCase {
     private final ConcertSchedulePort schedulePort;
     private final RedisTemplate<String, String> redisTemplate;
 
-    // Redis Key 상수
-    private static final String VELOCITY_RANKING = "ranking:velocity";  // 단일 랭킹
+    private static final String VELOCITY_RANKING = "ranking:velocity";
     private static final String SCHEDULE_STATS = "stats:schedule:";
 
     // 설정 값
@@ -32,8 +30,10 @@ public class ConcertRankingService implements RankingUseCase {
 
     /**
      * 예약 확정 시 호출 - 판매 속도 추적
+     * 랭킹이 변경되므로 캐시 무효화
      */
     @Override
+    @CacheEvict(value = "concertRankings", allEntries = true)
     public void trackReservation(Long scheduleId, int seatCount) {
         String statsKey = SCHEDULE_STATS + scheduleId;
 
@@ -121,9 +121,13 @@ public class ConcertRankingService implements RankingUseCase {
 
     /**
      * 빠른 판매 랭킹 조회 (통합)
+     * 조회 결과 캐싱 (10초 TTL)
      */
     @Override
+    @Cacheable(value = "concertRankings", key = "#limit")
     public List<ConcertRankingDto> getFastSellingRanking(int limit) {
+        log.debug("랭킹 조회 - Redis에서 데이터 조회 (캐시 미스)");
+
         // 높은 점수 순으로 조회 (빠른 판매 순)
         Set<ZSetOperations.TypedTuple<String>> rankings =
                 redisTemplate.opsForZSet().reverseRangeWithScores(VELOCITY_RANKING, 0, limit - 1);
