@@ -20,17 +20,12 @@ public class RankingController {
     private final RankingUseCase rankingUseCase;
 
     /**
-     * 현재 빠르게 판매 중인 공연 (판매 속도)
+     * 빠른 판매 랭킹 조회
+     * 판매 속도 기준, 매진 여부 포함
      */
-    @GetMapping("/selling/fast")
-    public ResponseEntity<List<FastSellingDto>> getFastSelling(
+    @GetMapping("/fast-selling")
+    public ResponseEntity<List<ConcertRankingDto>> getFastSelling(
             @RequestParam(defaultValue = "10") int limit) {
         return ResponseEntity.ok(rankingUseCase.getFastSellingRanking(limit));
-    }
-
-    @GetMapping("/soldout/fastest")
-    public ResponseEntity<List<SoldOutRankingDto>> getFastestSoldOut(
-            @RequestParam(defaultValue = "10") int limit) {
-        return ResponseEntity.ok(rankingUseCase.getFastestSoldOutRanking(limit));
     }
 }
