@@ -20,7 +20,6 @@ import java.util.UUID;
 
 @Slf4j
 @Component
-@Primary
 @RequiredArgsConstructor
 public class MySqlQueueAdapter implements QueuePort {
 

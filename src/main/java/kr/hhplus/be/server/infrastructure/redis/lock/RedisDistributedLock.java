@@ -58,21 +58,18 @@ public class RedisDistributedLock {
 
             if (acquired) {
                 try {
-                    log.debug("락 획득 성공: key={}, value={}", lockKey, lockValue);
+                    log.info("락 획득 성공: key={}, value={}", lockKey, lockValue);
                     return action.get();
                 } finally {
-                    boolean released = unlock(lockKey, lockValue);
-                    if (released) {
-                        log.debug("락 해제 성공: key={}", lockKey);
-                    } else {
-                        log.warn("락 해제 실패: key={} (이미 만료되었거나 다른 소유자)", lockKey);
-                    }
+                    // unlock 호출 제거 - TTL로 자동 만료
+                    // unlock의 race condition을 피하기 위해 명시적 해제를 하지 않음
+                    log.info("락은 TTL({}초)로 자동 만료됨: key={}", ttlSeconds, lockKey);
                 }
             }
 
             attempts++;
             if (attempts < retryCount) {
-                log.debug("락 획득 실패, 재시도 {}/{}: key={}", attempts, retryCount, lockKey);
+                log.info("락 획득 실패, 재시도 {}/{}: key={}", attempts, retryCount, lockKey);
                 sleep(retryDelayMillis);
             }
         }
@@ -91,6 +88,7 @@ public class RedisDistributedLock {
     public boolean tryLock(String key, String value, long ttlSeconds) {
         Boolean success = redisTemplate.opsForValue()
                 .setIfAbsent(key, value, Duration.ofSeconds(ttlSeconds));
+        log.info("tryLock 호출 - key: {}, ttl: {}초, 결과: {}", key, ttlSeconds, success);
         return Boolean.TRUE.equals(success);
     }
 
