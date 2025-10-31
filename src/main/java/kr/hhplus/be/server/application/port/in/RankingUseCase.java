@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.application.port.in;
 
+import java.io.Serializable;
 import java.util.List;
 
 public interface RankingUseCase {
@@ -19,5 +20,5 @@ public interface RankingUseCase {
             double velocityPerMinute,
             boolean isSoldOut,
             Integer soldOutSeconds
-    ) {}
+    ) implements Serializable {}
 }

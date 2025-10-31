@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -49,6 +51,19 @@ public class ConcertScheduleJpaAdapter implements ConcertSchedulePort {
                 .toList();
     }
 
+    /**
+     * 여러 스케줄을 한 번에 조회
+     */
+    @Override
+    public Map<Long, ConcertSchedule> findAllByIds(List<Long> ids) {
+        return repository.findAllById(ids)
+                .stream()
+                .collect(Collectors.toMap(
+                        ConcertScheduleJpaEntity::getId,
+                        this::toDomain
+                ));
+    }
+
     @Override
     public ConcertSchedule save(ConcertSchedule schedule) {
         // 도메인 → JPA 엔티티 변환
@@ -61,7 +76,6 @@ public class ConcertScheduleJpaAdapter implements ConcertSchedulePort {
                             "존재하지 않는 스케줄입니다: " + schedule.getId().value()));
 
             // 필요한 필드 업데이트 (예: 좌석수 변경 등)
-            // entity.setSeatCount(schedule.getTotalSeats());
         } else {
             // 새 엔티티 생성
             ConcertJpaEntity concertEntity = repository.findById(schedule.getConcertId().value())

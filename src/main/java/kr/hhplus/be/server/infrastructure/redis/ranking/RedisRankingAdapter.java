@@ -2,15 +2,15 @@ package kr.hhplus.be.server.infrastructure.redis.ranking;
 
 import kr.hhplus.be.server.application.port.out.RankingPort;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class RedisRankingAdapter implements RankingPort {
@@ -40,9 +40,32 @@ public class RedisRankingAdapter implements RankingPort {
     }
 
     @Override
+    public long incrementSoldCount(String scheduleId, int increment) {
+        String key = SCHEDULE_STATS + scheduleId;
+
+        // Redis HINCRBY는 atomic 연산
+        Long newCount = redisTemplate.opsForHash().increment(key, "soldCount", increment);
+
+        // lastSaleTime도 함께 업데이트
+        redisTemplate.opsForHash().put(key, "lastSaleTime",
+                String.valueOf(System.currentTimeMillis()));
+
+        return newCount != null ? newCount : increment;
+    }
+
+    @Override
+    public boolean setStartTimeIfAbsent(String scheduleId, long startTime) {
+        String key = SCHEDULE_STATS + scheduleId;
+
+        // Redis HSETNX는 atomic 연산 (없을 때만 set)
+        Boolean success = redisTemplate.opsForHash().putIfAbsent(key, "startTime", String.valueOf(startTime));
+
+        return Boolean.TRUE.equals(success);
+    }
+
+    @Override
     public void updateVelocityRanking(String scheduleId, double score) {
-        String hourKey = "ranking:velocity:" + getCurrentHour();
-        redisTemplate.opsForZSet().add(hourKey, "schedule:" + scheduleId, score);
+        redisTemplate.opsForZSet().add(VELOCITY_RANKING, "schedule:" + scheduleId, score);
     }
 
     @Override
@@ -52,11 +75,8 @@ public class RedisRankingAdapter implements RankingPort {
 
     @Override
     public Set<String> getTopByVelocity(int limit) {
-        // 현재 시간대 키 사용
-        String currentHourKey = "ranking:velocity:" + getCurrentHour();
-        Set<String> result = redisTemplate.opsForZSet().reverseRange(currentHourKey, 0, limit - 1);
+        Set<String> result = redisTemplate.opsForZSet().reverseRange(VELOCITY_RANKING, 0, limit - 1);
 
-        // null 체크 후 반환
         return result != null ? result : Set.of();
     }
 
@@ -66,11 +86,5 @@ public class RedisRankingAdapter implements RankingPort {
 
         // null 체크 후 반환
         return result != null ? result : Set.of();
-    }
-
-    // Helper 메서드 추가
-    private String getCurrentHour() {
-        return LocalDateTime.now()
-                .format(DateTimeFormatter.ofPattern("yyyyMMddHH"));
     }
 }
