@@ -107,6 +107,7 @@ public class ConcertRankingService implements RankingUseCase {
     /**
      * 판매 속도 랭킹 업데이트
      */
+
     private void updateVelocityRanking(Long scheduleId, long soldCount) {
         Map<String, String> stats = rankingPort.getStats(String.valueOf(scheduleId));
         String startTimeStr = stats.get("startTime");
@@ -118,20 +119,22 @@ public class ConcertRankingService implements RankingUseCase {
 
         try {
             long startTime = Long.parseLong(startTimeStr);
-            long elapsedMinutes = (System.currentTimeMillis() - startTime) / 60000;
-            if (elapsedMinutes < 1) elapsedMinutes = 1;
+            long elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000;
 
-            // 분당 판매량 = 판매 속도
-            double velocity = soldCount / (double) elapsedMinutes;
+            // 판매 시작 후 1초 미만은 1초로 간주 (0 나누기 방지)
+            if (elapsedSeconds < 1) {
+                elapsedSeconds = 1;
+            }
 
-            // Port를 통해 랭킹 업데이트
+            // 초당 판매량 = 판매 속도
+            double velocity = soldCount / (double) elapsedSeconds;
+
             rankingPort.updateVelocityRanking(String.valueOf(scheduleId), velocity);
-
-            log.debug("판매 속도 업데이트 - scheduleId: {}, velocity: {:.2f} tickets/min",
+            log.debug("velocity 업데이트 - scheduleId: {}, velocity: {:.2f} 장/초",
                     scheduleId, velocity);
+
         } catch (NumberFormatException e) {
-            log.error("startTime 파싱 실패 - scheduleId: {}, startTime: {}",
-                    scheduleId, startTimeStr);
+            log.error("startTime 파싱 실패 - scheduleId: {}", scheduleId, e);
         }
     }
 
@@ -264,11 +267,15 @@ public class ConcertRankingService implements RankingUseCase {
         try {
             long startTime = Long.parseLong(startTimeStr);
             int soldCount = Integer.parseInt(soldCountStr);
-            long elapsedMinutes = (System.currentTimeMillis() - startTime) / 60000;
+            long elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000;
 
-            if (elapsedMinutes < 1) elapsedMinutes = 1;
+            // 판매 시작 후 1초 미만은 1초로 간주 (0 나누기 방지)
+            if (elapsedSeconds < 1) {
+                elapsedSeconds = 1;
+            }
 
-            return soldCount / (double) elapsedMinutes;
+            // 초당 판매량 반환
+            return soldCount / (double) elapsedSeconds;
         } catch (NumberFormatException e) {
             log.warn("판매 속도 계산 실패 - startTime: {}, soldCount: {}",
                     startTimeStr, soldCountStr);
