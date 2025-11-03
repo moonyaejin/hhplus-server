@@ -258,8 +258,22 @@ class RankingCachePerformanceTest {
         log.info("11초 후 (캐시 만료): {}}ms", time2Ms);
         log.info("캐시 만료 후가 더 느림: {}", time2Ms > time1Ms);
 
-        // Then: 결과는 같지만, 11초 후는 다시 조회하므로 약간 더 느림
-        assertThat(result1).isEqualTo(result2);
+        // Then: 기본 정보는 같지만, velocityPerMinute는 시간에 따라 변함
+        assertThat(result1).hasSize(1);
+        assertThat(result2).hasSize(1);
+
+        ConcertRankingDto dto1 = result1.get(0);
+        ConcertRankingDto dto2 = result2.get(0);
+
+        // 변하지 않는 값들 검증
+        assertThat(dto1.scheduleId()).isEqualTo(dto2.scheduleId());
+        assertThat(dto1.soldCount()).isEqualTo(dto2.soldCount());
+
+        // velocityPerMinute는 시간이 지나면서 변해야 함 (캐시 만료 확인)
+        assertThat(dto1.velocityPerMinute()).isNotEqualTo(dto2.velocityPerMinute());
+
+        log.info("캐시 전 velocity: {}, 캐시 만료 후 velocity: {}",
+                dto1.velocityPerMinute(), dto2.velocityPerMinute());
 
         // 테스트 환경에서는 시간 차이가 미세할 수 있으므로
         // 단순히 11초 후 조회가 정상 동작하는지만 확인
