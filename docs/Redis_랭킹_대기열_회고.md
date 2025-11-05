@@ -235,8 +235,6 @@ record ConcertRankingDto(
 
 `JdkSerializationRedisSerializer`로 변경하고 DTO에 `Serializable`을 구현해서 타입 안전성을 보장했다.
 
-아 죄송해요! 실제 구현된 전체 코드를 제대로 반영해서 다시 작성할게요.
-
 ---
 
 #### 문제 2. N+1 문제 발견과 배치 조회
