@@ -117,14 +117,14 @@ class CachePerformanceTest {
         int measureCount = 100;    // 티켓 오픈 시 폭발적인 트래픽
 
         // 1단계: 워밍업 (JVM 최적화 + 초기 사용자 시뮬레이션)
-        log.info("🔥 워밍업 시작 ({}회)...", warmupCount);
+        log.info("워밍업 시작 ({}회)...", warmupCount);
         for (int i = 0; i < warmupCount; i++) {
             concertService.getAllConcerts();
         }
 
         // 2단계: 캐시 클리어 후 캐시 미스 측정 (DB 조회)
         cacheManager.getCache("concerts").clear();
-        log.info("📊 캐시 미스 측정 ({}회 반복)...", measureCount);
+        log.info("캐시 미스 측정 ({}회 반복)...", measureCount);
 
         long totalTimeMiss = 0;
         for (int i = 0; i < measureCount; i++) {
@@ -136,7 +136,7 @@ class CachePerformanceTest {
         long avgTimeMissNano = totalTimeMiss / measureCount;
 
         // 3단계: 캐시 히트 측정 (캐시에서 조회)
-        log.info("⚡ 캐시 히트 측정 ({}회 반복)...", measureCount);
+        log.info("캐시 히트 측정 ({}회 반복)...", measureCount);
         concertService.getAllConcerts(); // 캐시 채우기
 
         long totalTimeHit = 0;
@@ -152,7 +152,7 @@ class CachePerformanceTest {
         long avgTimeHitMs = avgTimeHitNano / 1_000_000;
 
         // Then: 결과 검증
-        log.info("📈 콘서트 목록 캐시 성능 ({}회 평균):", measureCount);
+        log.info("콘서트 목록 캐시 성능 ({}회 평균):", measureCount);
         log.info("  - 캐시 미스 (DB 조회): {}ms ({}ns)", avgTimeMissMs, avgTimeMissNano);
         log.info("  - 캐시 히트 (메모리):  {}ms ({}ns)", avgTimeHitMs, avgTimeHitNano);
         if (avgTimeMissNano > 0) {

@@ -1,6 +1,7 @@
 package kr.hhplus.be.server;
 
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
+import kr.hhplus.be.server.application.port.in.RankingUseCase;
 import kr.hhplus.be.server.application.port.in.ReservationUseCase.*;
 import kr.hhplus.be.server.application.port.out.*;
 import kr.hhplus.be.server.application.service.ReservationService;
@@ -41,6 +42,7 @@ class ReservationServiceTest {
     @Mock private SeatHoldPort seatHoldPort;
     @Mock private RedisDistributedLock distributedLock;
     @Mock private TransactionTemplate transactionTemplate;
+    @Mock private RankingUseCase rankingUseCase;
 
     private ReservationService reservationService;
 
@@ -59,7 +61,8 @@ class ReservationServiceTest {
                 domainService,
                 seatHoldPort,
                 distributedLock,
-                transactionTemplate
+                transactionTemplate,
+                rankingUseCase
         );
 
         // 분산락과 트랜잭션 Mock 동작 설정

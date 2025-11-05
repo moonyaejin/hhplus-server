@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.application.service;
 
+import kr.hhplus.be.server.application.port.in.RankingUseCase;
 import kr.hhplus.be.server.application.port.in.ReservationUseCase;
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
 import kr.hhplus.be.server.application.port.out.*;
@@ -12,6 +13,7 @@ import kr.hhplus.be.server.domain.queue.QueueTokenNotActiveException;
 import kr.hhplus.be.server.domain.reservation.*;
 import kr.hhplus.be.server.infrastructure.redis.lock.RedisDistributedLock;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -21,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 예약 애플리케이션 서비스
@@ -34,6 +37,8 @@ import java.util.Optional;
  * - TransactionTemplate으로 락 안에서 트랜잭션 시작
  * - 순서: 락 획득 → 트랜잭션 시작 → 작업 → 트랜잭션 커밋 → 락 해제
  */
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReservationService implements ReservationUseCase {
@@ -46,6 +51,7 @@ public class ReservationService implements ReservationUseCase {
     private final SeatHoldPort seatHoldPort;
     private final RedisDistributedLock distributedLock;
     private final TransactionTemplate transactionTemplate;
+    private final RankingUseCase rankingUseCase;
 
     /**
      * 좌석 임시 배정
@@ -192,12 +198,28 @@ public class ReservationService implements ReservationUseCase {
         // 7. 대기열 토큰 만료
         queuePort.expire(command.queueToken());
 
+        // 8. 랭킹 시스템에 판매 기록
+        try {
+            CompletableFuture.runAsync(() -> {
+                rankingUseCase.trackReservation(
+                        reservation.getSeatIdentifier().scheduleId().value(),
+                        1  // 예약된 좌석 수
+                );
+            });
+            log.info("랭킹 업데이트 완료 - scheduleId: {}",
+                    reservation.getSeatIdentifier().scheduleId().value());
+        } catch (Exception e) {
+            log.warn("랭킹 업데이트 실패 (무시): {}", e.getMessage());
+        }
+
+        // ConfirmReservationResult 객체 생성하여 반환
         return new ConfirmReservationResult(
                 reservation.getId().value(),
                 paymentResult.balance(),
                 confirmedAt
         );
     }
+
 
     /**
      * 예약 조회 (읽기 전용)

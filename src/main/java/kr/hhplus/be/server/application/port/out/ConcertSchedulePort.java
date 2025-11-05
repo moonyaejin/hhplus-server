@@ -4,6 +4,7 @@ import kr.hhplus.be.server.domain.concert.ConcertSchedule;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface ConcertSchedulePort {
@@ -20,6 +21,8 @@ public interface ConcertSchedulePort {
     // 사용 가능한 날짜 목록 조회
     List<LocalDate> findAvailableDates(int days);
 
-    // 스케줄 저장 (필요시)
+    // 스케줄 저장
     ConcertSchedule save(ConcertSchedule schedule);
+
+    Map<Long, ConcertSchedule> findAllByIds(List<Long> ids);
 }
