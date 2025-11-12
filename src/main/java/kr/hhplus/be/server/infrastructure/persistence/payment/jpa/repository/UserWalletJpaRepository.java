@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public interface UserWalletJpaRepository extends JpaRepository<UserWalletJpaEntity, UUID> {
 
-    // 결제/충전 시 동시성 제어용 (행 잠금)
+    // 결제/충전 시 동시성 제어용
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select w from UserWalletJpaEntity w where w.userId = :userId")
     Optional<UserWalletJpaEntity> findForUpdate(@Param("userId") UUID userId);

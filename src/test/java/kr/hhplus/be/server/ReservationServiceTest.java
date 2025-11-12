@@ -1,7 +1,7 @@
 package kr.hhplus.be.server;
 
+import kr.hhplus.be.server.application.event.ReservationConfirmedEvent;
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
-import kr.hhplus.be.server.application.port.in.RankingUseCase;
 import kr.hhplus.be.server.application.port.in.ReservationUseCase.*;
 import kr.hhplus.be.server.application.port.out.*;
 import kr.hhplus.be.server.application.service.ReservationService;
@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
@@ -42,7 +43,7 @@ class ReservationServiceTest {
     @Mock private SeatHoldPort seatHoldPort;
     @Mock private RedisDistributedLock distributedLock;
     @Mock private TransactionTemplate transactionTemplate;
-    @Mock private RankingUseCase rankingUseCase;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     private ReservationService reservationService;
 
@@ -62,11 +63,10 @@ class ReservationServiceTest {
                 seatHoldPort,
                 distributedLock,
                 transactionTemplate,
-                rankingUseCase
+                eventPublisher
         );
 
         // 분산락과 트랜잭션 Mock 동작 설정
-        // lenient()를 사용하여 사용되지 않아도 에러가 발생하지 않도록 함
         lenient().when(distributedLock.executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any()))
                 .thenAnswer(invocation -> {
                     var supplier = invocation.getArgument(4, java.util.function.Supplier.class);
@@ -88,7 +88,6 @@ class ReservationServiceTest {
                 QUEUE_TOKEN, SCHEDULE_ID, SEAT_NUMBER
         );
 
-        // Mock 설정
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(true);
         when(queuePort.userIdOf(QUEUE_TOKEN)).thenReturn(USER_ID);
 
@@ -99,11 +98,8 @@ class ReservationServiceTest {
                 50
         );
         when(concertSchedulePort.findById(any())).thenReturn(Optional.of(schedule));
-
-        // Redis 좌석 점유 성공
         when(seatHoldPort.tryHold(any(), any(), any())).thenReturn(true);
 
-        // 도메인 서비스 Mock
         Money price = Money.of(80_000L);
         when(domainService.calculateSeatPrice(any())).thenReturn(price);
 
@@ -115,7 +111,6 @@ class ReservationServiceTest {
         );
         when(domainService.createTemporaryReservation(any(), any(), any(), any(), any(), any()))
                 .thenReturn(mockReservation);
-
         when(reservationRepository.save(any())).thenReturn(mockReservation);
 
         // when
@@ -126,22 +121,9 @@ class ReservationServiceTest {
         assertThat(result.price()).isEqualTo(80_000L);
         assertThat(result.reservationId()).isNotNull();
 
-        // 검증: 분산락 사용 확인
-        verify(distributedLock).executeWithLock(
-                anyString(),  // lockKey
-                anyLong(),    // ttl
-                anyInt(),     // retryCount
-                anyLong(),    // retryDelay
-                any()         // action
-        );
-
-        // 검증: 트랜잭션 사용 확인
+        verify(distributedLock).executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any());
         verify(transactionTemplate).execute(any());
-
-        // 검증: Redis 좌석 점유 시도
         verify(seatHoldPort).tryHold(any(SeatIdentifier.class), any(UserId.class), eq(Duration.ofMinutes(5)));
-
-        // 검증: 예약 저장
         verify(reservationRepository).save(any(Reservation.class));
     }
 
@@ -161,10 +143,7 @@ class ReservationServiceTest {
                 .isInstanceOf(QueueTokenExpiredException.class)
                 .hasMessage("유효하지 않거나 만료된 토큰입니다");
 
-        // 검증: 분산락도 시도하지 않음 (검증 단계에서 실패)
         verify(distributedLock, never()).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
-
-        // 검증: 좌석 점유 시도하지 않음
         verify(seatHoldPort, never()).tryHold(any(), any(), any());
     }
 
@@ -186,11 +165,8 @@ class ReservationServiceTest {
                 50
         );
         when(concertSchedulePort.findById(any())).thenReturn(Optional.of(schedule));
-
-        // Redis 좌석 점유 실패
         when(seatHoldPort.tryHold(any(), any(), any())).thenReturn(false);
 
-        // 다른 사용자가 점유 중
         SeatHoldStatus otherUserHold = new SeatHoldStatus(
                 UserId.generate(),
                 LocalDateTime.now().minusMinutes(1),
@@ -202,7 +178,6 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> reservationService.temporaryAssign(command))
                 .isInstanceOf(SeatAlreadyAssignedException.class);
 
-        // 검증: 예약 저장하지 않음
         verify(reservationRepository, never()).save(any());
     }
 
@@ -216,22 +191,22 @@ class ReservationServiceTest {
                 QUEUE_TOKEN, reservationId, idempotencyKey
         );
 
-        // Mock 설정
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(true);
         when(queuePort.userIdOf(QUEUE_TOKEN)).thenReturn(USER_ID);
 
-        Reservation reservation = Reservation.temporaryAssign(
+        // restore()로 명시적으로 ID 지정
+        Reservation reservation = Reservation.restore(
+                new ReservationId(reservationId),
                 UserId.ofString(USER_ID),
                 new SeatIdentifier(new ConcertScheduleId(SCHEDULE_ID), new SeatNumber(SEAT_NUMBER)),
                 Money.of(80_000L),
-                LocalDateTime.now().minusMinutes(2)
+                ReservationStatus.TEMPORARY_ASSIGNED,
+                LocalDateTime.now().minusMinutes(2),
+                null,
+                0L
         );
         when(reservationRepository.findById(any())).thenReturn(Optional.of(reservation));
-
-        // 결제 성공
-        when(paymentUseCase.pay(any())).thenReturn(
-                new PaymentUseCase.BalanceResult(20_000L)
-        );
+        when(paymentUseCase.pay(any())).thenReturn(new PaymentUseCase.BalanceResult(20_000L));
 
         // when
         ConfirmReservationResult result = reservationService.confirmReservation(command);
@@ -240,32 +215,30 @@ class ReservationServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.remainingBalance()).isEqualTo(20_000L);
 
-        // 검증: 분산락 사용 확인
-        verify(distributedLock).executeWithLock(
-                contains("confirm"),  // lockKey에 "confirm" 포함
-                anyLong(),
-                anyInt(),
-                anyLong(),
-                any()
-        );
-
-        // 검증: 트랜잭션 사용 확인
+        verify(distributedLock).executeWithLock(contains("confirm"), anyLong(), anyInt(), anyLong(), any());
         verify(transactionTemplate).execute(any());
 
-        // 검증: 결제 요청
         ArgumentCaptor<PaymentUseCase.PaymentCommand> paymentCaptor =
                 ArgumentCaptor.forClass(PaymentUseCase.PaymentCommand.class);
         verify(paymentUseCase).pay(paymentCaptor.capture());
         assertThat(paymentCaptor.getValue().amount()).isEqualTo(80_000L);
 
-        // 검증: 예약 저장
         verify(reservationRepository).save(any(Reservation.class));
-
-        // 검증: Redis 좌석 해제
         verify(seatHoldPort).release(any(SeatIdentifier.class));
-
-        // 검증: 토큰 만료
         verify(queuePort).expire(QUEUE_TOKEN);
+
+        // 검증: 이벤트 발행
+        ArgumentCaptor<ReservationConfirmedEvent> eventCaptor =
+                ArgumentCaptor.forClass(ReservationConfirmedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+
+        ReservationConfirmedEvent publishedEvent = eventCaptor.getValue();
+        assertThat(publishedEvent.reservationId()).isEqualTo(reservationId);
+        assertThat(publishedEvent.userId()).isEqualTo(USER_ID);
+        assertThat(publishedEvent.scheduleId()).isEqualTo(SCHEDULE_ID);
+        assertThat(publishedEvent.seatNumber()).isEqualTo(SEAT_NUMBER);
+        assertThat(publishedEvent.price()).isEqualTo(80_000L);
+        assertThat(publishedEvent.confirmedAt()).isNotNull();
     }
 
     @Test
@@ -281,31 +254,29 @@ class ReservationServiceTest {
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(true);
         when(queuePort.userIdOf(QUEUE_TOKEN)).thenReturn(USER_ID);
 
-        Reservation reservation = Reservation.temporaryAssign(
+        // restore()로 명시적으로 ID 지정 (여기도 수정!)
+        Reservation reservation = Reservation.restore(
+                new ReservationId(reservationId),
                 UserId.ofString(USER_ID),
                 new SeatIdentifier(new ConcertScheduleId(SCHEDULE_ID), new SeatNumber(SEAT_NUMBER)),
                 Money.of(80_000L),
-                LocalDateTime.now().minusMinutes(2)
+                ReservationStatus.TEMPORARY_ASSIGNED,
+                LocalDateTime.now().minusMinutes(2),
+                null,
+                0L
         );
         when(reservationRepository.findById(any())).thenReturn(Optional.of(reservation));
-
-        // 결제 실패 (잔액 부족)
-        when(paymentUseCase.pay(any()))
-                .thenThrow(new RuntimeException("잔액이 부족합니다"));
+        when(paymentUseCase.pay(any())).thenThrow(new RuntimeException("잔액이 부족합니다"));
 
         // when & then
         assertThatThrownBy(() -> reservationService.confirmReservation(command))
                 .hasMessage("잔액이 부족합니다");
 
-        // 검증: 분산락과 트랜잭션은 실행됨 (내부에서 예외 발생)
         verify(distributedLock).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
         verify(transactionTemplate).execute(any());
-
-        // 검증: 좌석 해제되지 않음 (결제 실패로 트랜잭션 롤백)
         verify(seatHoldPort, never()).release(any());
-
-        // 검증: 토큰 만료되지 않음
         verify(queuePort, never()).expire(any());
+        verify(eventPublisher, never()).publishEvent(any(ReservationConfirmedEvent.class));
     }
 
     @Test
@@ -333,7 +304,6 @@ class ReservationServiceTest {
         assertThat(result.price()).isEqualTo(80_000L);
         assertThat(result.status()).isEqualTo("TEMPORARY_ASSIGNED");
 
-        // 검증: 조회는 분산락 사용하지 않음
         verify(distributedLock, never()).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
     }
 
@@ -342,11 +312,11 @@ class ReservationServiceTest {
     void getReservation_Unauthorized() {
         // given
         String reservationId = "test-reservation-id";
-        String otherUserId = "550e8400-e29b-41d4-a716-446655440001";  // 다른 사용자 ID
+        String otherUserId = "550e8400-e29b-41d4-a716-446655440001";
         ReservationQuery query = new ReservationQuery(otherUserId, reservationId);
 
         Reservation reservation = Reservation.temporaryAssign(
-                UserId.ofString(USER_ID),  // 원래 사용자의 예약
+                UserId.ofString(USER_ID),
                 new SeatIdentifier(new ConcertScheduleId(SCHEDULE_ID), new SeatNumber(SEAT_NUMBER)),
                 Money.of(80_000L),
                 LocalDateTime.now().minusMinutes(2)
