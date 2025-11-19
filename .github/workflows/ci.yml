@@ -1,46 +1,65 @@
 name: CI
 
-# 언제 실행?
 on:
-  # PR 생성하거나 업데이트할 때
+  push:
+    branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
 
-  # main 브랜치에 push할 때
-  push:
-    branches: [ main ]
-
 jobs:
   test:
-    name: 테스트 실행
-    runs-on: ubuntu-latest  # GitHub이 제공하는 Ubuntu 서버
+    runs-on: ubuntu-latest
+
+    services:
+      # MySQL
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: hhplus
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+      # Redis
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
 
     steps:
-      # 1. 코드 가져오기
-      - name: 코드 체크아웃
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Java 17 설치
-      - name: Java 17 설치
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'  # Gradle 캐시로 빌드 속도 향상
+          distribution: 'temurin'
+          cache: gradle
 
-      # 3. Gradle 실행 권한 부여
-      - name: Gradle 실행 권한 부여
+      - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 4. 테스트 실행
-      - name: 테스트 실행
+      - name: Run tests
         run: ./gradlew test
+        env:
+          SPRING_PROFILES_ACTIVE: test
 
-      # 5. 테스트 결과 리포트
-      - name: 테스트 결과 업로드
+      - name: Upload test results
+        if: always()
         uses: actions/upload-artifact@v4
-        if: always()  # 성공/실패 상관없이 항상 실행
         with:
           name: test-results
           path: build/reports/tests/test/
-          retention-days: 7  # 7일간 보관
+          retention-days: 7
