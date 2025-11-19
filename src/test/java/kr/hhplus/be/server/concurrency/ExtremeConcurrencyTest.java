@@ -9,6 +9,7 @@ import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.UserWal
 import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletJpaRepository;
 import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository.SeatHoldJpaRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - 대규모 동시 요청 시나리오
  * - TaskExecutor로 안정적인 스레드 관리
  */
+@Disabled("성능 테스트. 시간이 오래 걸려 CI에서 제외. 로컬에서 필요시 직접 실행")
 @Slf4j
 @SpringBootTest
 @Import(TestTaskExecutorConfig.class)

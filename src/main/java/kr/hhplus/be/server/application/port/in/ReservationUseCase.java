@@ -50,8 +50,23 @@ public interface ReservationUseCase {
             LocalDateTime expirationTime
     ) {}
 
+    record CancelReservationCommand(
+            String queueToken,      // 선택사항 - 없어도 될 수도
+            String reservationId,
+            String userId,
+            String reason           // 취소 사유 (선택)
+    ) {}
+
+    record CancelReservationResult(
+            String reservationId,
+            Long refundAmount,      // 환불 금액
+            LocalDateTime cancelledAt
+    ) {}
+
     // Use Case 메서드들
     TemporaryAssignResult temporaryAssign(TemporaryAssignCommand command);
     ConfirmReservationResult confirmReservation(ConfirmReservationCommand command);
     ReservationInfo getReservation(ReservationQuery query);
+    CancelReservationResult cancelReservation(CancelReservationCommand command);
+
 }

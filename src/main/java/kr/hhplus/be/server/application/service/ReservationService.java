@@ -1,6 +1,7 @@
 package kr.hhplus.be.server.application.service;
 
-import kr.hhplus.be.server.application.port.in.RankingUseCase;
+import kr.hhplus.be.server.application.event.ReservationCancelledEvent;
+import kr.hhplus.be.server.application.event.ReservationConfirmedEvent;
 import kr.hhplus.be.server.application.port.in.ReservationUseCase;
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
 import kr.hhplus.be.server.application.port.out.*;
@@ -14,6 +15,7 @@ import kr.hhplus.be.server.domain.reservation.*;
 import kr.hhplus.be.server.infrastructure.redis.lock.RedisDistributedLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -23,21 +25,18 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * 예약 애플리케이션 서비스
  *
- * [분산락 적용 포인트]
+ * [분산락 적용 ]
  * 1. temporaryAssign: 좌석별 락 (동시 예약 방지)
  * 2. confirmReservation: 예약ID별 락 (중복 확정/결제 방지)
  *
- * [트랜잭션 제어]
- * - 클래스 레벨 @Transactional 제거 (수동 제어)
- * - TransactionTemplate으로 락 안에서 트랜잭션 시작
- * - 순서: 락 획득 → 트랜잭션 시작 → 작업 → 트랜잭션 커밋 → 락 해제
+ * [관심사 분리]
+ * - 핵심 로직: 결제, 예약확정, 좌석해제, 토큰만료
+ * - 부가 로직: 랭킹 업데이트, 데이터 플랫폼 전송 (이벤트로 분리)
  */
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -51,7 +50,7 @@ public class ReservationService implements ReservationUseCase {
     private final SeatHoldPort seatHoldPort;
     private final RedisDistributedLock distributedLock;
     private final TransactionTemplate transactionTemplate;
-    private final RankingUseCase rankingUseCase;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 좌석 임시 배정
@@ -61,11 +60,11 @@ public class ReservationService implements ReservationUseCase {
     @Override
     public TemporaryAssignResult temporaryAssign(TemporaryAssignCommand command) {
 
-        // 1. 대기열 검증 (락/트랜잭션 불필요)
+        // 1. 대기열 검증
         validateQueueToken(command.queueToken());
         UserId userId = UserId.ofString(queuePort.userIdOf(command.queueToken()));
 
-        // 2. 콘서트 스케줄 검증 (락/트랜잭션 불필요)
+        // 2. 콘서트 스케줄 검증
         Optional<ConcertSchedule> scheduleOpt = concertSchedulePort.findById(
                 new ConcertScheduleId(command.concertScheduleId()));
         if (scheduleOpt.isEmpty()) {
@@ -78,7 +77,7 @@ public class ReservationService implements ReservationUseCase {
                 new SeatNumber(command.seatNumber())
         );
 
-        // 4~8. 분산락 → 트랜잭션 순서로 실행
+        // 분산락 → 트랜잭션 순서로 실행
         String lockKey = RedisDistributedLock.buildSeatLockKey(seatIdentifier);
 
         return distributedLock.executeWithLock(
@@ -93,7 +92,7 @@ public class ReservationService implements ReservationUseCase {
     }
 
     /**
-     * 좌석 임시 배정 실제 로직 (분산락 + 트랜잭션 내부)
+     * 좌석 임시 배정 실제 로직
      */
     private TemporaryAssignResult executeTemporaryAssign(
             SeatIdentifier seatIdentifier, UserId userId) {
@@ -114,10 +113,10 @@ public class ReservationService implements ReservationUseCase {
             List<Reservation> existingReservations = getExistingReservations(seatIdentifier);
             Reservation userExistingReservation = getUserExistingReservation(userId, seatIdentifier);
 
-            // 6. 가격 계산 (도메인 서비스)
+            // 6. 가격 계산
             Money price = domainService.calculateSeatPrice(seatIdentifier);
 
-            // 7. 예약 생성 (도메인 서비스)
+            // 7. 예약 생성
             Reservation reservation = domainService.createTemporaryReservation(
                     userId, seatIdentifier, price, LocalDateTime.now(),
                     existingReservations, userExistingReservation
@@ -148,11 +147,11 @@ public class ReservationService implements ReservationUseCase {
     @Override
     public ConfirmReservationResult confirmReservation(ConfirmReservationCommand command) {
 
-        // 1. 대기열 검증 (락/트랜잭션 불필요)
+        // 1. 대기열 검증
         validateQueueToken(command.queueToken());
         UserId userId = UserId.ofString(queuePort.userIdOf(command.queueToken()));
 
-        // 2. 예약 ID로 분산락 (중복 확정/결제 방지)
+        // 2. 예약 ID로 분산락
         String lockKey = "lock:reservation:confirm:" + command.reservationId();
 
         return distributedLock.executeWithLock(
@@ -167,18 +166,95 @@ public class ReservationService implements ReservationUseCase {
     }
 
     /**
-     * 예약 확정 실제 로직 (분산락 + 트랜잭션 내부)
+     * 예약 취소
+     * - 분산락: lock:reservation:cancel:{reservationId}
+     * - 범위: 예약 조회 ~ 환불 ~ 취소 ~ 이벤트 발행
+     * - 중요: 중복 취소 방지
+     */
+    @Override
+    public CancelReservationResult cancelReservation(CancelReservationCommand command) {
+
+        // 1. 사용자 ID 추출 (대기열 검증은 생략 - 취소는 언제든 가능)
+        UserId userId = UserId.ofString(command.userId());
+
+        // 2. 예약 ID로 분산락 (중복 취소 방지)
+        String lockKey = "lock:reservation:cancel:" + command.reservationId();
+
+        return distributedLock.executeWithLock(
+                lockKey,
+                10L,        // TTL: 10초
+                3,          // 최대 3번 재시도
+                100L,       // 100ms 대기 후 재시도
+                () -> transactionTemplate.execute(status ->
+                        executeCancelReservation(command, userId)
+                )
+        );
+    }
+
+    /**
+     * 예약 취소 실제 로직 (분산락 + 트랜잭션 내부)
+     */
+    private CancelReservationResult executeCancelReservation(
+            CancelReservationCommand command, UserId userId) {
+
+        // 1. 예약 조회 및 권한 검증
+        Reservation reservation = findAndValidateReservation(command.reservationId(), userId);
+
+        // 2. 취소 가능 여부 검증 (CONFIRMED 상태만 취소 가능)
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+            throw new InvalidReservationStateException(
+                    "확정된 예약만 취소할 수 있습니다. 현재 상태: " + reservation.getStatus());
+        }
+
+        // 3. 환불 처리
+        PaymentUseCase.RefundCommand refundCommand = new PaymentUseCase.RefundCommand(
+                userId.asString(),
+                reservation.getPrice().amount(),
+                "refund-" + command.reservationId() + "-" + System.currentTimeMillis()
+        );
+
+        PaymentUseCase.BalanceResult refundResult = paymentUseCase.refund(refundCommand);
+
+        // 4. 예약 상태 변경 → CANCELLED
+        LocalDateTime cancelledAt = LocalDateTime.now();
+        reservation.cancel(cancelledAt);  // 도메인 메서드 (아래에서 추가 필요)
+        reservationRepository.save(reservation);
+
+        // 5. 예약 취소 이벤트 발행
+        //    - 랭킹 차감
+        //    - 데이터 플랫폼 전송
+        eventPublisher.publishEvent(
+                ReservationCancelledEvent.of(
+                        reservation.getId().value(),
+                        reservation.getUserId().asString(),
+                        reservation.getSeatIdentifier().scheduleId().value(),
+                        reservation.getSeatIdentifier().seatNumber().value(),
+                        reservation.getPrice().amount(),
+                        cancelledAt
+                )
+        );
+        log.info("예약 취소 이벤트 발행 완료 - reservationId: {}", reservation.getId().value());
+
+        return new CancelReservationResult(
+                reservation.getId().value(),
+                reservation.getPrice().amount(),
+                cancelledAt
+        );
+    }
+
+    /**
+     * 예약 확정 실제 로직
      */
     private ConfirmReservationResult executeConfirmReservation(
             ConfirmReservationCommand command, UserId userId) {
 
-        // 2. 예약 조회 및 권한 검증
+        // 1. 예약 조회 및 권한 검증
         Reservation reservation = findAndValidateReservation(command.reservationId(), userId);
 
-        // 3. 도메인 서비스를 통한 확정 가능 여부 검증
+        // 2. 도메인 서비스를 통한 확정 가능 여부 검증
         domainService.validateConfirmation(reservation, LocalDateTime.now());
 
-        // 4. PaymentUseCase를 통한 결제 처리
+        // 3. PaymentUseCase를 통한 결제 처리
         PaymentUseCase.PaymentCommand paymentCommand = new PaymentUseCase.PaymentCommand(
                 userId.asString(),
                 reservation.getPrice().amount(),
@@ -187,30 +263,31 @@ public class ReservationService implements ReservationUseCase {
 
         PaymentUseCase.BalanceResult paymentResult = paymentUseCase.pay(paymentCommand);
 
-        // 5. 예약 확정 (도메인 객체의 비즈니스 메서드)
+        // 4. 예약 확정
         LocalDateTime confirmedAt = LocalDateTime.now();
         reservation.confirm(confirmedAt);
         reservationRepository.save(reservation);
 
-        // 6. Redis에서 좌석 점유 해제
+        // 5. Redis에서 좌석 점유 해제
         seatHoldPort.release(reservation.getSeatIdentifier());
 
-        // 7. 대기열 토큰 만료
+        // 6. 대기열 토큰 만료
         queuePort.expire(command.queueToken());
 
-        // 8. 랭킹 시스템에 판매 기록
-        try {
-            CompletableFuture.runAsync(() -> {
-                rankingUseCase.trackReservation(
+        // 7. 예약 확정 완료 이벤트 발행
+        //    - 랭킹 업데이트
+        //    - 데이터 플랫폼 전송
+        eventPublisher.publishEvent(
+                ReservationConfirmedEvent.of(
+                        reservation.getId().value(),
+                        reservation.getUserId().asString(),
                         reservation.getSeatIdentifier().scheduleId().value(),
-                        1  // 예약된 좌석 수
-                );
-            });
-            log.info("랭킹 업데이트 완료 - scheduleId: {}",
-                    reservation.getSeatIdentifier().scheduleId().value());
-        } catch (Exception e) {
-            log.warn("랭킹 업데이트 실패 (무시): {}", e.getMessage());
-        }
+                        reservation.getSeatIdentifier().seatNumber().value(),
+                        reservation.getPrice().amount(),
+                        confirmedAt
+                )
+        );
+        log.info("예약 확정 이벤트 발행 완료 - reservationId: {}", reservation.getId().value());
 
         // ConfirmReservationResult 객체 생성하여 반환
         return new ConfirmReservationResult(
@@ -222,7 +299,7 @@ public class ReservationService implements ReservationUseCase {
 
 
     /**
-     * 예약 조회 (읽기 전용)
+     * 예약 조회
      */
     @Transactional(readOnly = true)
     @Override
@@ -243,7 +320,6 @@ public class ReservationService implements ReservationUseCase {
         );
     }
 
-    // === Private Helper Methods ===
 
     private void validateQueueToken(String token) {
         try {
