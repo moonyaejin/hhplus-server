@@ -1,6 +1,7 @@
 package kr.hhplus.be.server.concurrency;
 
 import kr.hhplus.be.server.concurrency.config.TestTaskExecutorConfig;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - 단일 쿼리로 원자적 처리
  */
 
+@Disabled("MySQL 조건부 UPDATE 방식 → Redis 분산락으로 전환하여 현재는 사용 안 함")
 @SpringBootTest
 @Import(TestTaskExecutorConfig.class)
 @TestPropertySource(properties = {

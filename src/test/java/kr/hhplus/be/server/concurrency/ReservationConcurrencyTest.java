@@ -13,6 +13,7 @@ import kr.hhplus.be.server.infrastructure.persistence.queue.jpa.entity.QueueToke
 import kr.hhplus.be.server.infrastructure.persistence.queue.jpa.repository.QueueTokenJpaRepository;
 import kr.hhplus.be.server.infrastructure.redis.lock.LockAcquisitionException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.*;
 /**
  * 분산락 통합 테스트 (실제 DB + Redis)
  */
+@Disabled("Testcontainers 방식(ConcurrencyIntegrationTest)으로 개선되어 현재는 사용 안 함")
 @SpringBootTest
 @DisplayName("분산락 통합 테스트")
 class ReservationConcurrencyTest {

@@ -53,6 +53,7 @@ public class ConcurrencyIntegrationTest {
     @Qualifier("concurrencyTestExecutor")
     private TaskExecutor taskExecutor;
 
+
     @Autowired
     @Qualifier("singleThreadTestExecutor")
     private TaskExecutor singleThreadExecutor;
