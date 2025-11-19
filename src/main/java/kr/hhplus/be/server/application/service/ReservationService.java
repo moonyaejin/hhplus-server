@@ -1,5 +1,6 @@
 package kr.hhplus.be.server.application.service;
 
+import kr.hhplus.be.server.application.event.ReservationCancelledEvent;
 import kr.hhplus.be.server.application.event.ReservationConfirmedEvent;
 import kr.hhplus.be.server.application.port.in.ReservationUseCase;
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
@@ -161,6 +162,83 @@ public class ReservationService implements ReservationUseCase {
                 () -> transactionTemplate.execute(status ->
                         executeConfirmReservation(command, userId)
                 )
+        );
+    }
+
+    /**
+     * 예약 취소
+     * - 분산락: lock:reservation:cancel:{reservationId}
+     * - 범위: 예약 조회 ~ 환불 ~ 취소 ~ 이벤트 발행
+     * - 중요: 중복 취소 방지
+     */
+    @Override
+    public CancelReservationResult cancelReservation(CancelReservationCommand command) {
+
+        // 1. 사용자 ID 추출 (대기열 검증은 생략 - 취소는 언제든 가능)
+        UserId userId = UserId.ofString(command.userId());
+
+        // 2. 예약 ID로 분산락 (중복 취소 방지)
+        String lockKey = "lock:reservation:cancel:" + command.reservationId();
+
+        return distributedLock.executeWithLock(
+                lockKey,
+                10L,        // TTL: 10초
+                3,          // 최대 3번 재시도
+                100L,       // 100ms 대기 후 재시도
+                () -> transactionTemplate.execute(status ->
+                        executeCancelReservation(command, userId)
+                )
+        );
+    }
+
+    /**
+     * 예약 취소 실제 로직 (분산락 + 트랜잭션 내부)
+     */
+    private CancelReservationResult executeCancelReservation(
+            CancelReservationCommand command, UserId userId) {
+
+        // 1. 예약 조회 및 권한 검증
+        Reservation reservation = findAndValidateReservation(command.reservationId(), userId);
+
+        // 2. 취소 가능 여부 검증 (CONFIRMED 상태만 취소 가능)
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+            throw new InvalidReservationStateException(
+                    "확정된 예약만 취소할 수 있습니다. 현재 상태: " + reservation.getStatus());
+        }
+
+        // 3. 환불 처리
+        PaymentUseCase.RefundCommand refundCommand = new PaymentUseCase.RefundCommand(
+                userId.asString(),
+                reservation.getPrice().amount(),
+                "refund-" + command.reservationId() + "-" + System.currentTimeMillis()
+        );
+
+        PaymentUseCase.BalanceResult refundResult = paymentUseCase.refund(refundCommand);
+
+        // 4. 예약 상태 변경 → CANCELLED
+        LocalDateTime cancelledAt = LocalDateTime.now();
+        reservation.cancel(cancelledAt);  // 도메인 메서드 (아래에서 추가 필요)
+        reservationRepository.save(reservation);
+
+        // 5. 예약 취소 이벤트 발행
+        //    - 랭킹 차감
+        //    - 데이터 플랫폼 전송
+        eventPublisher.publishEvent(
+                ReservationCancelledEvent.of(
+                        reservation.getId().value(),
+                        reservation.getUserId().asString(),
+                        reservation.getSeatIdentifier().scheduleId().value(),
+                        reservation.getSeatIdentifier().seatNumber().value(),
+                        reservation.getPrice().amount(),
+                        cancelledAt
+                )
+        );
+        log.info("예약 취소 이벤트 발행 완료 - reservationId: {}", reservation.getId().value());
+
+        return new CancelReservationResult(
+                reservation.getId().value(),
+                reservation.getPrice().amount(),
+                cancelledAt
         );
     }
 

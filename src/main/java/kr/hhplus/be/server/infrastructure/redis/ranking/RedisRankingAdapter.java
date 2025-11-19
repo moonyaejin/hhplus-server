@@ -54,6 +54,20 @@ public class RedisRankingAdapter implements RankingPort {
     }
 
     @Override
+    public long decrementSoldCount(String scheduleId, int decrement) {
+        String key = SCHEDULE_STATS + scheduleId;
+
+        // Redis HINCRBY로 음수 값을 전달하여 차감 (atomic 연산)
+        Long newCount = redisTemplate.opsForHash().increment(key, "soldCount", -decrement);
+
+        // lastCancelTime 업데이트
+        redisTemplate.opsForHash().put(key, "lastCancelTime",
+                String.valueOf(System.currentTimeMillis()));
+
+        return newCount != null ? Math.max(newCount, 0) : 0;  // 음수 방지
+    }
+
+    @Override
     public boolean setStartTimeIfAbsent(String scheduleId, long startTime) {
         String key = SCHEDULE_STATS + scheduleId;
 
@@ -86,5 +100,11 @@ public class RedisRankingAdapter implements RankingPort {
 
         // null 체크 후 반환
         return result != null ? result : Set.of();
+    }
+
+    @Override
+    public void removeFromVelocityRanking(String scheduleId) {
+        redisTemplate.opsForZSet().remove(VELOCITY_RANKING, "schedule:" + scheduleId);
+        log.debug("랭킹에서 제거 - scheduleId: {}", scheduleId);
     }
 }

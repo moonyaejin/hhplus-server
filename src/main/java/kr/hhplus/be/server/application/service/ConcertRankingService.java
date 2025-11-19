@@ -60,6 +60,31 @@ public class ConcertRankingService implements RankingUseCase {
     }
 
     /**
+     * 예약 취소 시 호출 - 판매 수량 차감
+     */
+    @Override
+    @CacheEvict(value = "concertRankings", allEntries = true)
+    public void decrementReservation(Long scheduleId, int seatCount) {
+        String scheduleIdStr = String.valueOf(scheduleId);
+
+        // 판매 수량 감소
+        long newSoldCount = rankingPort.decrementSoldCount(scheduleIdStr, seatCount);
+
+        log.debug("예약 취소 반영 - scheduleId: {}, 차감: {}석, 현재: {}석",
+                scheduleId, seatCount, newSoldCount);
+
+        // 판매 속도 랭킹 재계산
+        if (newSoldCount > 0) {
+            updateVelocityRanking(scheduleId, newSoldCount);
+        } else {
+            // 모든 예약이 취소된 경우 랭킹에서 제거
+            rankingPort.removeFromVelocityRanking(String.valueOf(scheduleId));
+            log.debug("모든 예약 취소로 랭킹에서 제거 - scheduleId: {}", scheduleId);
+        }
+    }
+
+
+    /**
      * 총 좌석 수 조회 (캐싱)
      *
      * 1순위: Redis에 저장된 값

@@ -135,6 +135,56 @@ public class PaymentService implements PaymentUseCase {
         return new BalanceResult(wallet.getBalance().amount());
     }
 
+    /**
+     * 환불 처리
+     * - 분산락: lock:refund:user:{userId}
+     * - 범위: 사용자별 환불 직렬화
+     * - 순서: 락 획득 → 멱등성 체크 → 트랜잭션 실행
+     */
+    @Override
+    public BalanceResult refund(RefundCommand command) {
+        UserId userId = UserId.ofString(command.userId());
+        String lockKey = "lock:refund:user:" + command.userId();
+
+        // 락 먼저 획득
+        return distributedLock.executeWithLock(
+                lockKey,
+                10L,        // TTL: 10초
+                3,          // 최대 3번 재시도
+                100L,       // 100ms 대기 후 재시도
+                () -> {
+                    // 락 안에서 멱등성 체크 (동시 요청 시 일관성 보장)
+                    if (walletPort.isIdempotencyKeyUsed(userId, command.idempotencyKey())) {
+                        long currentBalance = walletPort.balanceOf(command.userId());
+                        return new BalanceResult(currentBalance);
+                    }
+
+                    // 트랜잭션 실행
+                    return transactionTemplate.execute(status ->
+                            executeRefund(command, userId)
+                    );
+                }
+        );
+    }
+
+    /**
+     * 환불 처리
+     */
+    private BalanceResult executeRefund(RefundCommand command, UserId userId) {
+        // 지갑 조회
+        Wallet wallet = walletPort.findByUserId(userId)
+                .orElseThrow(() -> new IllegalStateException("지갑을 찾을 수 없습니다: " + command.userId()));
+
+        // 도메인 로직 실행 (환불 = 충전과 동일)
+        wallet.charge(command.amount(), command.idempotencyKey());
+
+        // 변경사항 저장
+        walletPort.save(wallet);
+        walletPort.saveLedgerEntry(userId, command.amount(), "REFUND", command.idempotencyKey());
+
+        return new BalanceResult(wallet.getBalance().amount());
+    }
+
     @Override
     public BalanceResult getBalance(BalanceQuery query) {
         long balance = walletPort.balanceOf(query.userId());
