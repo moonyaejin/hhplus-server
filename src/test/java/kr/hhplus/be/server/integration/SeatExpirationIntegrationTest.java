@@ -12,20 +12,28 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 좌석 만료 통합 테스트
+ *
+ * CI 환경에서는 GitHub Actions의 MySQL 서비스를 사용
+ * 로컬 환경에서는 application-test.yml의 설정 사용
+ */
 @SpringBootTest
-@Testcontainers
+@ActiveProfiles("test")
 class SeatExpirationIntegrationTest {
+
+    @Autowired
+    private SeatHoldPort seatHoldPort;
+
+    @Autowired
+    private SeatHoldJpaRepository seatHoldRepository;
 
     @BeforeEach
     void setUp() {
@@ -41,37 +49,17 @@ class SeatExpirationIntegrationTest {
         seatHoldRepository.flush();
     }
 
-    @Container
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
-            .withDatabaseName("hhplus")
-            .withUsername("test")
-            .withPassword("test");
-
-    @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
-    }  // 여기 괄호 닫기
-
-    @Autowired
-    private SeatHoldPort seatHoldPort;
-
-    @Autowired
-    private SeatHoldJpaRepository seatHoldRepository;
-
     /**
      * 시나리오: 결제하지 않은 사용자의 좌석이 다시 예약 가능해지는 상황
-
+     *
      * Given: User1이 좌석을 1초간만 점유
      * When:
      * - 즉시: User2 예약 시도 → 실패
      * - 2초 후: User2 재시도 → 성공
      * Then: 만료된 좌석이 다시 예약 가능함
-
+     *
      * 검증: 좌석 점유 TTL 메커니즘과 자원 재활용
      */
-
     @Test
     @DisplayName("만료된 좌석은 다시 예약 가능해야 한다")
     void expiredSeatCanBeReservedAgain() throws InterruptedException {
@@ -107,14 +95,13 @@ class SeatExpirationIntegrationTest {
 
     /**
      * 시나리오: 다른 사용자가 점유 중인 좌석 예약 시도
-
+     *
      * Given: User1이 5분간 좌석 점유 중
      * When: User2가 같은 좌석 예약 시도
      * Then: 점유 시간이 남아있는 동안은 실패
-
+     *
      * 검증: 점유 시간 동안의 배타적 접근 보장
      */
-
     @Test
     @DisplayName("만료 시간 전까지는 다른 사용자가 예약할 수 없다")
     void cannotReserveBeforeExpiration() {
@@ -138,6 +125,7 @@ class SeatExpirationIntegrationTest {
 
         // When 3: 첫 번째 사용자가 여전히 점유 중
         boolean stillHeldByUser1 = seatHoldPort.isHeldBy(seat, user1);
+
         // Then
         assertThat(firstHold).isTrue();
         assertThat(secondHold).isFalse();
