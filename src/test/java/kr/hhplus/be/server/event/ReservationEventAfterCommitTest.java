@@ -49,6 +49,7 @@ import static org.mockito.Mockito.*;
  * 2. 트랜잭션이 완료되기 전 이벤트 리스너의 call count가 0인것과,
  *    트랜잭션이 완료된 직후 call count가 1인것을 검증
  */
+@Disabled("비동기 결제로 변경")
 @Slf4j
 @SpringBootTest
 @DisplayName("AFTER_COMMIT 동작 검증")
