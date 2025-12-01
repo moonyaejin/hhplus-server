@@ -42,6 +42,12 @@ public class ReservationJpaEntity {
     @Column(name = "confirmed_at")
     private LocalDateTime confirmedAt;
 
+    @Column(name = "payment_requested_at")
+    private LocalDateTime paymentRequestedAt;
+
+    @Column(name = "payment_fail_reason")
+    private String paymentFailReason;
+
     @Version
     private Long version;
 
@@ -71,12 +77,23 @@ public class ReservationJpaEntity {
         this.updatedAt = LocalDateTime.now();
     }
 
+    public ReservationJpaEntity(String id, String userId, Long concertScheduleId,
+                                Integer seatNumber, Long price, ReservationStatus status,
+                                LocalDateTime temporaryAssignedAt, LocalDateTime confirmedAt,
+                                LocalDateTime paymentRequestedAt, String paymentFailReason,
+                                Long version) {
+        this(id, userId, concertScheduleId, seatNumber, price, status,
+                temporaryAssignedAt, confirmedAt, version);
+        this.paymentRequestedAt = paymentRequestedAt;
+        this.paymentFailReason = paymentFailReason;
+    }
+
     @PreUpdate
     void preUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
 
-    // Getters and Setters
+    // Getters
     public String getId() { return id; }
     public String getUserId() { return userId; }
     public Long getConcertScheduleId() { return concertScheduleId; }
@@ -85,10 +102,15 @@ public class ReservationJpaEntity {
     public ReservationStatus getStatus() { return status; }
     public LocalDateTime getTemporaryAssignedAt() { return temporaryAssignedAt; }
     public LocalDateTime getConfirmedAt() { return confirmedAt; }
+    public LocalDateTime getPaymentRequestedAt() { return paymentRequestedAt; }
+    public String getPaymentFailReason() { return paymentFailReason; }
     public Long getVersion() { return version; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 
+    // Setters
     public void setStatus(ReservationStatus status) { this.status = status; }
     public void setConfirmedAt(LocalDateTime confirmedAt) { this.confirmedAt = confirmedAt; }
+    public void setPaymentRequestedAt(LocalDateTime paymentRequestedAt) { this.paymentRequestedAt = paymentRequestedAt; }
+    public void setPaymentFailReason(String paymentFailReason) { this.paymentFailReason = paymentFailReason; }
 }

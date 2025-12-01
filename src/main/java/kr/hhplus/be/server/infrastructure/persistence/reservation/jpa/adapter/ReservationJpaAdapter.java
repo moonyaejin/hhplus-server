@@ -39,6 +39,8 @@ public class ReservationJpaAdapter implements ReservationRepository {
                     reservation.getStatus(),
                     reservation.getTemporaryAssignedAt(),
                     reservation.getConfirmedAt(),
+                    reservation.getPaymentRequestedAt(),
+                    reservation.getPaymentFailReason(),
                     null  // version null로 설정
             );
         } else {
@@ -56,6 +58,13 @@ public class ReservationJpaAdapter implements ReservationRepository {
             entity.setStatus(reservation.getStatus());
             if (reservation.getConfirmedAt() != null) {
                 entity.setConfirmedAt(reservation.getConfirmedAt());
+            }
+            // 결제 관련 필드 업데이트
+            if (reservation.getPaymentRequestedAt() != null) {
+                entity.setPaymentRequestedAt(reservation.getPaymentRequestedAt());
+            }
+            if (reservation.getPaymentFailReason() != null) {
+                entity.setPaymentFailReason(reservation.getPaymentFailReason());
             }
         }
 
@@ -155,6 +164,18 @@ public class ReservationJpaAdapter implements ReservationRepository {
         return jpaRepository.countByConcertScheduleIdAndStatus(scheduleId, status);
     }
 
+    // ===== 결제 비동기화 관련 메서드 구현 =====
+
+    @Override
+    public List<Reservation> findByStatusAndPaymentRequestedAtBefore(
+            ReservationStatus status,
+            LocalDateTime paymentRequestedAtBefore) {
+        return jpaRepository.findByStatusAndPaymentRequestedAtBefore(status, paymentRequestedAtBefore)
+                .stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
     // === Private Helper Methods ===
 
     private ReservationJpaEntity toEntity(Reservation reservation) {
@@ -167,12 +188,14 @@ public class ReservationJpaAdapter implements ReservationRepository {
                 reservation.getStatus(),
                 reservation.getTemporaryAssignedAt(),
                 reservation.getConfirmedAt(),
+                reservation.getPaymentRequestedAt(),
+                reservation.getPaymentFailReason(),
                 reservation.getVersion()
         );
     }
 
     private Reservation toDomain(ReservationJpaEntity entity) {
-        return Reservation.restore(
+        return Reservation.restoreWithPaymentInfo(
                 new ReservationId(entity.getId()),
                 UserId.ofString(entity.getUserId()),
                 new SeatIdentifier(
@@ -183,6 +206,8 @@ public class ReservationJpaAdapter implements ReservationRepository {
                 entity.getStatus(),
                 entity.getTemporaryAssignedAt(),
                 entity.getConfirmedAt(),
+                entity.getPaymentRequestedAt(),
+                entity.getPaymentFailReason(),
                 entity.getVersion()
         );
     }

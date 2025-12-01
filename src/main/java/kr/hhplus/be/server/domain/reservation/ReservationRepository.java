@@ -37,4 +37,17 @@ public interface ReservationRepository {
     // 통계 조회
     long countByStatus(ReservationStatus status);
     long countByScheduleIdAndStatus(Long scheduleId, ReservationStatus status);
+
+    /**
+     * 특정 상태이면서 결제 요청 시간이 특정 시간 이전인 예약 조회
+     * (결제 타임아웃 처리용)
+     *
+     * @param status 예약 상태
+     * @param paymentRequestedAtBefore 결제 요청 시간 기준
+     * @return 조건에 맞는 예약 목록
+     */
+    List<Reservation> findByStatusAndPaymentRequestedAtBefore(
+            ReservationStatus status,
+            LocalDateTime paymentRequestedAtBefore
+    );
 }

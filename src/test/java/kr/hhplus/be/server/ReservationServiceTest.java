@@ -1,6 +1,5 @@
 package kr.hhplus.be.server;
 
-import kr.hhplus.be.server.application.event.ReservationConfirmedEvent;
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
 import kr.hhplus.be.server.application.port.in.ReservationUseCase.*;
 import kr.hhplus.be.server.application.port.out.*;
@@ -11,6 +10,8 @@ import kr.hhplus.be.server.domain.concert.ConcertSchedule;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
 import kr.hhplus.be.server.domain.concert.ConcertId;
 import kr.hhplus.be.server.domain.reservation.*;
+import kr.hhplus.be.server.infrastructure.kafka.message.PaymentRequestMessage;
+import kr.hhplus.be.server.infrastructure.kafka.producer.PaymentKafkaProducer;
 import kr.hhplus.be.server.infrastructure.redis.lock.RedisDistributedLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,7 @@ class ReservationServiceTest {
     @Mock private RedisDistributedLock distributedLock;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private PaymentKafkaProducer paymentKafkaProducer;
 
     private ReservationService reservationService;
 
@@ -63,7 +65,8 @@ class ReservationServiceTest {
                 seatHoldPort,
                 distributedLock,
                 transactionTemplate,
-                eventPublisher
+                eventPublisher,
+                paymentKafkaProducer
         );
 
         // 분산락과 트랜잭션 Mock 동작 설정
@@ -88,6 +91,7 @@ class ReservationServiceTest {
                 QUEUE_TOKEN, SCHEDULE_ID, SEAT_NUMBER
         );
 
+        // Mock 설정
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(true);
         when(queuePort.userIdOf(QUEUE_TOKEN)).thenReturn(USER_ID);
 
@@ -98,8 +102,11 @@ class ReservationServiceTest {
                 50
         );
         when(concertSchedulePort.findById(any())).thenReturn(Optional.of(schedule));
+
+        // Redis 좌석 점유 성공
         when(seatHoldPort.tryHold(any(), any(), any())).thenReturn(true);
 
+        // 도메인 서비스 Mock
         Money price = Money.of(80_000L);
         when(domainService.calculateSeatPrice(any())).thenReturn(price);
 
@@ -111,6 +118,7 @@ class ReservationServiceTest {
         );
         when(domainService.createTemporaryReservation(any(), any(), any(), any(), any(), any()))
                 .thenReturn(mockReservation);
+
         when(reservationRepository.save(any())).thenReturn(mockReservation);
 
         // when
@@ -121,9 +129,22 @@ class ReservationServiceTest {
         assertThat(result.price()).isEqualTo(80_000L);
         assertThat(result.reservationId()).isNotNull();
 
-        verify(distributedLock).executeWithLock(anyString(), anyLong(), anyInt(), anyLong(), any());
+        // 검증: 분산락 사용 확인
+        verify(distributedLock).executeWithLock(
+                anyString(),  // lockKey
+                anyLong(),    // ttl
+                anyInt(),     // retryCount
+                anyLong(),    // retryDelay
+                any()         // action
+        );
+
+        // 검증: 트랜잭션 사용 확인
         verify(transactionTemplate).execute(any());
+
+        // 검증: Redis 좌석 점유 시도
         verify(seatHoldPort).tryHold(any(SeatIdentifier.class), any(UserId.class), eq(Duration.ofMinutes(5)));
+
+        // 검증: 예약 저장
         verify(reservationRepository).save(any(Reservation.class));
     }
 
@@ -143,7 +164,10 @@ class ReservationServiceTest {
                 .isInstanceOf(QueueTokenExpiredException.class)
                 .hasMessage("유효하지 않거나 만료된 토큰입니다");
 
+        // 검증: 분산락도 시도하지 않음 (검증 단계에서 실패)
         verify(distributedLock, never()).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
+
+        // 검증: 좌석 점유 시도하지 않음
         verify(seatHoldPort, never()).tryHold(any(), any(), any());
     }
 
@@ -165,8 +189,11 @@ class ReservationServiceTest {
                 50
         );
         when(concertSchedulePort.findById(any())).thenReturn(Optional.of(schedule));
+
+        // Redis 좌석 점유 실패
         when(seatHoldPort.tryHold(any(), any(), any())).thenReturn(false);
 
+        // 다른 사용자가 점유 중
         SeatHoldStatus otherUserHold = new SeatHoldStatus(
                 UserId.generate(),
                 LocalDateTime.now().minusMinutes(1),
@@ -178,11 +205,12 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> reservationService.temporaryAssign(command))
                 .isInstanceOf(SeatAlreadyAssignedException.class);
 
+        // 검증: 예약 저장하지 않음
         verify(reservationRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("예약 확정 - 성공 케이스")
+    @DisplayName("예약 확정 (비동기 결제) - 성공 케이스")
     void confirmReservation_Success() {
         // given
         String reservationId = "test-reservation-id";
@@ -191,10 +219,11 @@ class ReservationServiceTest {
                 QUEUE_TOKEN, reservationId, idempotencyKey
         );
 
+        // Mock 설정
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(true);
         when(queuePort.userIdOf(QUEUE_TOKEN)).thenReturn(USER_ID);
 
-        // restore()로 명시적으로 ID 지정
+        // restore()로 특정 ID를 가진 예약 생성
         Reservation reservation = Reservation.restore(
                 new ReservationId(reservationId),
                 UserId.ofString(USER_ID),
@@ -206,44 +235,57 @@ class ReservationServiceTest {
                 0L
         );
         when(reservationRepository.findById(any())).thenReturn(Optional.of(reservation));
-        when(paymentUseCase.pay(any())).thenReturn(new PaymentUseCase.BalanceResult(20_000L));
+        when(reservationRepository.save(any())).thenReturn(reservation);
 
         // when
         ConfirmReservationResult result = reservationService.confirmReservation(command);
 
-        // then
+        // then - 비동기 결제이므로 PAYMENT_PENDING 상태로 즉시 응답
         assertThat(result).isNotNull();
-        assertThat(result.remainingBalance()).isEqualTo(20_000L);
+        assertThat(result.reservationId()).isEqualTo(reservationId);
+        assertThat(result.status()).isEqualTo("PAYMENT_PENDING");
+        assertThat(result.remainingBalance()).isNull();  // 비동기라 아직 모름
+        assertThat(result.confirmedAt()).isNull();       // 비동기라 아직 확정 안됨
 
-        verify(distributedLock).executeWithLock(contains("confirm"), anyLong(), anyInt(), anyLong(), any());
+        // 검증: 분산락 사용 확인
+        verify(distributedLock).executeWithLock(
+                contains("confirm"),  // lockKey에 "confirm" 포함
+                anyLong(),
+                anyInt(),
+                anyLong(),
+                any()
+        );
+
+        // 검증: 트랜잭션 사용 확인
         verify(transactionTemplate).execute(any());
 
-        ArgumentCaptor<PaymentUseCase.PaymentCommand> paymentCaptor =
-                ArgumentCaptor.forClass(PaymentUseCase.PaymentCommand.class);
-        verify(paymentUseCase).pay(paymentCaptor.capture());
-        assertThat(paymentCaptor.getValue().amount()).isEqualTo(80_000L);
+        // 검증: PaymentUseCase.pay()는 호출하지 않음 (비동기!)
+        verify(paymentUseCase, never()).pay(any());
 
+        // 검증: Kafka로 결제 요청 발행
+        ArgumentCaptor<PaymentRequestMessage> kafkaCaptor =
+                ArgumentCaptor.forClass(PaymentRequestMessage.class);
+        verify(paymentKafkaProducer).sendPaymentRequest(kafkaCaptor.capture());
+
+        PaymentRequestMessage sentMessage = kafkaCaptor.getValue();
+        assertThat(sentMessage.reservationId()).isEqualTo(reservationId);
+        assertThat(sentMessage.userId()).isEqualTo(USER_ID);
+        assertThat(sentMessage.amount()).isEqualTo(80_000L);
+        assertThat(sentMessage.idempotencyKey()).isEqualTo(idempotencyKey);
+
+        // 검증: 예약 저장 (상태 변경: PAYMENT_PENDING)
         verify(reservationRepository).save(any(Reservation.class));
-        verify(seatHoldPort).release(any(SeatIdentifier.class));
+
+        // 검증: 토큰 만료
         verify(queuePort).expire(QUEUE_TOKEN);
 
-        // 검증: 이벤트 발행
-        ArgumentCaptor<ReservationConfirmedEvent> eventCaptor =
-                ArgumentCaptor.forClass(ReservationConfirmedEvent.class);
-        verify(eventPublisher).publishEvent(eventCaptor.capture());
-
-        ReservationConfirmedEvent publishedEvent = eventCaptor.getValue();
-        assertThat(publishedEvent.reservationId()).isEqualTo(reservationId);
-        assertThat(publishedEvent.userId()).isEqualTo(USER_ID);
-        assertThat(publishedEvent.scheduleId()).isEqualTo(SCHEDULE_ID);
-        assertThat(publishedEvent.seatNumber()).isEqualTo(SEAT_NUMBER);
-        assertThat(publishedEvent.price()).isEqualTo(80_000L);
-        assertThat(publishedEvent.confirmedAt()).isNotNull();
+        // 검증: Redis 좌석 해제는 하지 않음 (결제 완료 후 PaymentResultConsumer에서 처리)
+        verify(seatHoldPort, never()).release(any());
     }
 
     @Test
-    @DisplayName("예약 확정 - 잔액 부족으로 실패")
-    void confirmReservation_InsufficientBalance() {
+    @DisplayName("예약 확정 - 만료된 예약")
+    void confirmReservation_ExpiredReservation() {
         // given
         String reservationId = "test-reservation-id";
         String idempotencyKey = "test-idempotency-key";
@@ -254,29 +296,33 @@ class ReservationServiceTest {
         when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(true);
         when(queuePort.userIdOf(QUEUE_TOKEN)).thenReturn(USER_ID);
 
-        // restore()로 명시적으로 ID 지정 (여기도 수정!)
-        Reservation reservation = Reservation.restore(
+        // 6분 전에 임시 배정된 예약 (5분 만료) - restore() 사용
+        Reservation expiredReservation = Reservation.restore(
                 new ReservationId(reservationId),
                 UserId.ofString(USER_ID),
                 new SeatIdentifier(new ConcertScheduleId(SCHEDULE_ID), new SeatNumber(SEAT_NUMBER)),
                 Money.of(80_000L),
                 ReservationStatus.TEMPORARY_ASSIGNED,
-                LocalDateTime.now().minusMinutes(2),
+                LocalDateTime.now().minusMinutes(6),
                 null,
                 0L
         );
-        when(reservationRepository.findById(any())).thenReturn(Optional.of(reservation));
-        when(paymentUseCase.pay(any())).thenThrow(new RuntimeException("잔액이 부족합니다"));
+        when(reservationRepository.findById(any())).thenReturn(Optional.of(expiredReservation));
+
+        // 도메인 서비스에서 만료 검증 실패
+        doThrow(new IllegalStateException("만료된 예약입니다"))
+                .when(domainService).validateConfirmation(any(), any());
 
         // when & then
         assertThatThrownBy(() -> reservationService.confirmReservation(command))
-                .hasMessage("잔액이 부족합니다");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("만료된 예약입니다");
 
-        verify(distributedLock).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
-        verify(transactionTemplate).execute(any());
-        verify(seatHoldPort, never()).release(any());
+        // 검증: Kafka 발행하지 않음
+        verify(paymentKafkaProducer, never()).sendPaymentRequest(any());
+
+        // 검증: 토큰 만료되지 않음
         verify(queuePort, never()).expire(any());
-        verify(eventPublisher, never()).publishEvent(any(ReservationConfirmedEvent.class));
     }
 
     @Test
@@ -304,6 +350,7 @@ class ReservationServiceTest {
         assertThat(result.price()).isEqualTo(80_000L);
         assertThat(result.status()).isEqualTo("TEMPORARY_ASSIGNED");
 
+        // 검증: 조회는 분산락 사용하지 않음
         verify(distributedLock, never()).executeWithLock(any(), anyLong(), anyInt(), anyLong(), any());
     }
 
@@ -312,11 +359,11 @@ class ReservationServiceTest {
     void getReservation_Unauthorized() {
         // given
         String reservationId = "test-reservation-id";
-        String otherUserId = "550e8400-e29b-41d4-a716-446655440001";
+        String otherUserId = "550e8400-e29b-41d4-a716-446655440001";  // 다른 사용자 ID
         ReservationQuery query = new ReservationQuery(otherUserId, reservationId);
 
         Reservation reservation = Reservation.temporaryAssign(
-                UserId.ofString(USER_ID),
+                UserId.ofString(USER_ID),  // 원래 사용자의 예약
                 new SeatIdentifier(new ConcertScheduleId(SCHEDULE_ID), new SeatNumber(SEAT_NUMBER)),
                 Money.of(80_000L),
                 LocalDateTime.now().minusMinutes(2)
@@ -327,5 +374,38 @@ class ReservationServiceTest {
         assertThatThrownBy(() -> reservationService.getReservation(query))
                 .isInstanceOf(UnauthorizedReservationAccessException.class)
                 .hasMessage("해당 예약에 접근할 권한이 없습니다");
+    }
+
+    @Test
+    @DisplayName("예약 확정 결과가 PAYMENT_PENDING인지 확인")
+    void confirmReservation_ReturnsPendingStatus() {
+        // given
+        String reservationId = "test-reservation-id";
+        ConfirmReservationCommand command = new ConfirmReservationCommand(
+                QUEUE_TOKEN, reservationId, "idempotency-key"
+        );
+
+        when(queuePort.isActive(QUEUE_TOKEN)).thenReturn(true);
+        when(queuePort.userIdOf(QUEUE_TOKEN)).thenReturn(USER_ID);
+
+        // restore()로 특정 ID를 가진 예약 생성
+        Reservation reservation = Reservation.restore(
+                new ReservationId(reservationId),
+                UserId.ofString(USER_ID),
+                new SeatIdentifier(new ConcertScheduleId(SCHEDULE_ID), new SeatNumber(SEAT_NUMBER)),
+                Money.of(80_000L),
+                ReservationStatus.TEMPORARY_ASSIGNED,
+                LocalDateTime.now().minusMinutes(2),
+                null,
+                0L
+        );
+        when(reservationRepository.findById(any())).thenReturn(Optional.of(reservation));
+        when(reservationRepository.save(any())).thenReturn(reservation);
+
+        // when
+        ConfirmReservationResult result = reservationService.confirmReservation(command);
+
+        // then
+        assertThat(result.isPaymentPending()).isTrue();
     }
 }
