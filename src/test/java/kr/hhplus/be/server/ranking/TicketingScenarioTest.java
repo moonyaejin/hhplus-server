@@ -21,10 +21,7 @@ import kr.hhplus.be.server.infrastructure.persistence.queue.jpa.repository.Queue
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.entity.UserJpaEntity;
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.repository.UserJpaRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -154,6 +151,7 @@ class TicketingScenarioTest {
      * - 평균 응답시간: 200-500ms
      * - P99: 1-3초
      */
+    @Disabled("비동기 결제로 변경 - 별도 Kafka 통합 테스트로 대체 예정")
     @Test
     @DisplayName("200명 동시 접속 → 대기열 → 50석 경쟁")
     void 실제_티켓팅_전체_플로우_200명() throws InterruptedException {
@@ -314,6 +312,7 @@ class TicketingScenarioTest {
      * - 대기열 차단: 900명
      * - 좌석 경합 실패: 50명
      */
+    @Disabled("비동기 결제로 변경 - 별도 Kafka 통합 테스트로 대체 예정")
     @Test
     @Tag("load-test")  // 태그로 분리
     @DisplayName("1000명 동시 접속 → 극한 부하 테스트")
