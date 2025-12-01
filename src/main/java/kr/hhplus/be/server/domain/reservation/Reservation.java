@@ -219,6 +219,13 @@ public class Reservation {
     }
 
     /**
+     * 결제 시작 가능 여부 (TEMPORARY_ASSIGNED 상태에서만 가능)
+     */
+    public boolean canStartPayment(LocalDateTime currentTime) {
+        return status == ReservationStatus.TEMPORARY_ASSIGNED && !isExpired(currentTime);
+    }
+
+    /**
      * 결제 필요 여부
      */
     public boolean requiresPayment() {
