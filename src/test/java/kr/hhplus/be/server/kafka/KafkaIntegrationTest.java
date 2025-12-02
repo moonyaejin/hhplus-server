@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Slf4j
 @SpringBootTest
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 @DisplayName("Kafka 통합 테스트")
 class KafkaIntegrationTest {
 

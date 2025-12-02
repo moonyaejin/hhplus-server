@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Slf4j
 @SpringBootTest
-@ActiveProfiles("local")
+@ActiveProfiles("test")
 @DisplayName("데이터 플랫폼 Kafka 전송 테스트")
 class DataPlatformKafkaTest {
 
