@@ -33,7 +33,7 @@ import static org.awaitility.Awaitility.await;
  * Kafka 비동기 결제 통합 테스트
  */
 @SpringBootTest
-@ActiveProfiles("local-test")
+@ActiveProfiles("test")
 @DisplayName("Kafka 비동기 결제 통합 테스트")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PaymentKafkaIntegrationTest {
