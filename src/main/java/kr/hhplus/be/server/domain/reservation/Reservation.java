@@ -112,14 +112,14 @@ public class Reservation {
      * TEMPORARY_ASSIGNED → PAYMENT_PENDING
      */
     public void startPayment() {
-        if (!status.canTransitionTo(ReservationStatus.PAYMENT_PENDING)) {
-            throw new IllegalStateException(
-                    String.format("현재 상태[%s]에서는 결제를 시작할 수 없습니다", status.getDisplayName())
-            );
+        if (isExpired(LocalDateTime.now())) {
+            throw new ReservationExpiredException("만료된 예약은 결제를 시작할 수 없습니다");
         }
 
-        if (isExpired(LocalDateTime.now())) {
-            throw new IllegalStateException("만료된 예약은 결제를 시작할 수 없습니다");
+        if (!status.canTransitionTo(ReservationStatus.PAYMENT_PENDING)) {
+            throw new InvalidReservationStateException(
+                    String.format("현재 상태[%s]에서는 결제를 시작할 수 없습니다", status.getDisplayName())
+            );
         }
 
         this.status = ReservationStatus.PAYMENT_PENDING;
@@ -144,7 +144,7 @@ public class Reservation {
      */
     public void failPayment(String failReason) {
         if (!status.canTransitionTo(ReservationStatus.PAYMENT_FAILED)) {
-            throw new IllegalStateException(
+            throw new InvalidReservationStateException(
                     String.format("현재 상태[%s]에서는 결제 실패 처리를 할 수 없습니다", status.getDisplayName())
             );
         }
@@ -158,7 +158,7 @@ public class Reservation {
      */
     public void cancel(LocalDateTime cancelledAt) {
         if (!status.canTransitionTo(ReservationStatus.CANCELLED)) {
-            throw new IllegalStateException(
+            throw new InvalidReservationStateException(
                     String.format("현재 상태[%s]에서는 취소할 수 없습니다", status.getDisplayName())
             );
         }
@@ -171,7 +171,7 @@ public class Reservation {
      */
     public void expire(LocalDateTime expiredAt) {
         if (status != ReservationStatus.TEMPORARY_ASSIGNED && status != ReservationStatus.PAYMENT_PENDING) {
-            throw new IllegalStateException(
+            throw new InvalidReservationStateException(
                     String.format("현재 상태[%s]에서는 만료처리할 수 없습니다", status.getDisplayName())
             );
         }
@@ -254,14 +254,14 @@ public class Reservation {
     // === Private 메서드들 ===
 
     private void validateConfirmation(LocalDateTime confirmedAt) {
-        if (!status.canTransitionTo(ReservationStatus.CONFIRMED)) {
-            throw new IllegalStateException(
-                    String.format("현재 상태[%s]에서는 확정할 수 없습니다", status.getDisplayName())
-            );
+        if (isExpired(confirmedAt)) {
+            throw new ReservationExpiredException("만료된 예약은 확정할 수 없습니다");
         }
 
-        if (isExpired(confirmedAt)) {
-            throw new IllegalStateException("만료된 예약은 확정할 수 없습니다");
+        if (!status.canTransitionTo(ReservationStatus.CONFIRMED)) {
+            throw new InvalidReservationStateException(
+                    String.format("현재 상태[%s]에서는 확정할 수 없습니다", status.getDisplayName())
+            );
         }
 
         if (confirmedAt.isBefore(temporaryAssignedAt)) {

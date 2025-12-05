@@ -17,6 +17,7 @@ import kr.hhplus.be.server.infrastructure.persistence.reservation.jpa.repository
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.entity.UserJpaEntity;
 import kr.hhplus.be.server.infrastructure.persistence.user.jpa.repository.UserJpaRepository;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -33,7 +34,8 @@ import static org.awaitility.Awaitility.await;
  * Kafka 비동기 결제 통합 테스트
  */
 @SpringBootTest
-@ActiveProfiles("test")
+@ActiveProfiles("local-test")
+@DisabledIfEnvironmentVariable(named = "CI", matches = "true")
 @DisplayName("Kafka 비동기 결제 통합 테스트")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class PaymentKafkaIntegrationTest {

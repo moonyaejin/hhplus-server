@@ -196,9 +196,6 @@ public class ReservationService implements ReservationUseCase {
         // 1. 예약 조회 및 권한 검증
         Reservation reservation = findAndValidateReservation(command.reservationId(), userId);
 
-        // 2. 도메인 서비스를 통한 확정 가능 여부 검증
-        domainService.validatePaymentStart(reservation, LocalDateTime.now());
-
         // 3. 상태 변경: TEMPORARY_ASSIGNED → PAYMENT_PENDING
         reservation.startPayment();
         reservationRepository.save(reservation);

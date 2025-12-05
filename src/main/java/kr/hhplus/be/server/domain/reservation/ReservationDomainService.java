@@ -42,18 +42,6 @@ public class ReservationDomainService {
     }
 
     /**
-     * 결제 시작 가능 여부 검증 (비동기 결제용)
-     */
-    public void validatePaymentStart(Reservation reservation, LocalDateTime currentTime) {
-        if (!reservation.canStartPayment(currentTime)) {
-            if (reservation.isExpired(currentTime)) {
-                throw new ReservationExpiredException("만료된 예약은 결제를 시작할 수 없습니다");
-            }
-            throw new InvalidReservationStateException("현재 상태에서는 결제를 시작할 수 없습니다");
-        }
-    }
-
-    /**
      * 예약 확정 가능 여부 검증
      */
     public void validateConfirmation(Reservation reservation, LocalDateTime currentTime) {
