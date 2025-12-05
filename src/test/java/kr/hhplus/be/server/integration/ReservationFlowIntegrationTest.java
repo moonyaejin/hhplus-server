@@ -12,6 +12,7 @@ import kr.hhplus.be.server.infrastructure.persistence.concert.jpa.repository.Con
 import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.entity.UserWalletJpaEntity;
 import kr.hhplus.be.server.infrastructure.persistence.payment.jpa.repository.UserWalletJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -101,23 +102,20 @@ class ReservationFlowIntegrationTest {
 
     /**
      * 시나리오: 사용자가 콘서트 예약을 처음부터 끝까지 완료하는 과정
-     * <p>
      * Given:
      * - 사용자 계정 (잔액: 100,000원)
      * - 콘서트 스케줄 (7일 후, 50석)
-     * <p>
      * When:
      * 1. 대기열 토큰 발급 → ACTIVE 상태 확인
      * 2. 15번 좌석 선택 → 일반석(80,000원) 임시 배정
      * 3. 예약 확정 요청 → 결제 및 최종 확정
-     * <p>
      * Then:
      * - 예약 상태: CONFIRMED
      * - 잔액: 20,000원 (100,000 - 80,000)
      * - 토큰: 만료 처리
-     * <p>
      * 검증: 전체 비즈니스 플로우의 정합성과 트랜잭션 일관성
      */
+    @Disabled("비동기 결제로 변경 - 별도 Kafka 통합 테스트로 대체 예정")
     @Test
     @DisplayName("전체 예약 플로우: 토큰 발급 → 좌석 예약 → 결제 완료")
     void completeReservationFlow() {

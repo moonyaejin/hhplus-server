@@ -47,4 +47,17 @@ public interface ReservationJpaRepository extends JpaRepository<ReservationJpaEn
     long countByStatus(ReservationStatus status);
 
     long countByConcertScheduleIdAndStatus(Long concertScheduleId, ReservationStatus status);
+
+    // ===== 결제 비동기화 관련 메서드 추가 =====
+
+    /**
+     * 특정 상태이면서 결제 요청 시간이 특정 시간 이전인 예약 조회
+     * (결제 타임아웃 처리용)
+     */
+    @Query("SELECT r FROM ReservationJpaEntity r " +
+            "WHERE r.status = :status " +
+            "AND r.paymentRequestedAt < :paymentRequestedAtBefore")
+    List<ReservationJpaEntity> findByStatusAndPaymentRequestedAtBefore(
+            @Param("status") ReservationStatus status,
+            @Param("paymentRequestedAtBefore") LocalDateTime paymentRequestedAtBefore);
 }

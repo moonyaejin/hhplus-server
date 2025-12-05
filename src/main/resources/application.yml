@@ -3,16 +3,6 @@ spring:
     name: hhplus
   profiles:
     active: local
-  datasource:
-    url: jdbc:mysql://127.0.0.1:${MYSQL_PORT}/${MYSQL_DATABASE}?serverTimezone=Asia/Seoul&characterEncoding=utf8
-    username: ${MYSQL_USER}
-    password: ${MYSQL_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    type: com.zaxxer.hikari.HikariDataSource
-    hikari:
-      maximum-pool-size: 10
-      connection-timeout: 10000
-      max-lifetime: 60000
   jpa:
     open-in-view: false
     generate-ddl: false
@@ -25,7 +15,6 @@ spring:
       hibernate.format_sql: true
   flyway:
     enabled: true
-    # baseline-on-migrate: true
   data:
     redis:
       timeout: 3000ms
@@ -39,18 +28,36 @@ spring:
     url: jdbc:mysql://localhost:3306/hhplus?characterEncoding=UTF-8&serverTimezone=UTC
     username: hhplus_user
     password: hhplus_user
-  jpa:
-    show-sql: false
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+      max-lifetime: 60000
   data:
     redis:
       host: localhost
       port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092,localhost:9093,localhost:9094
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: concert-reservation-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "kr.hhplus.be.server.*"
 
 logging:
   level:
-    org.hibernate.SQL: WARN  # SQL 로그 레벨 낮추기
+    org.hibernate.SQL: WARN
     org.hibernate.type: WARN
-    kr.hhplus.be.server.application.scheduler: INFO  # 스케줄러 로그 레벨
+    kr.hhplus.be.server.application.scheduler: INFO
 
 app:
   queue:
@@ -70,18 +77,37 @@ spring:
     activate:
       on-profile: test
   datasource:
-    url: jdbc:mysql://localhost:3306/hhplus?characterEncoding=UTF-8&serverTimezone=UTC
-    username: application
-    password: application
+    url: jdbc:mysql://localhost:3306/hhplus?characterEncoding=UTF-8&serverTimezone=UTC&createDatabaseIfNotExist=true
+    username: root
+    password: root
+  jpa:
+    hibernate:
+      ddl-auto: create
+  flyway:
+    enabled: false
   data:
     redis:
       host: localhost
       port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: concert-reservation-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "kr.hhplus.be.server.*"
 
 app:
   queue:
-    max-active-users: 10  # 테스트용 짧은 시간
-    token-ttl-minutes: 1  # 테스트용 짧은 시간
+    max-active-users: 10
+    token-ttl-minutes: 1
     scheduler:
       enabled: false
       process-interval-ms: 5000

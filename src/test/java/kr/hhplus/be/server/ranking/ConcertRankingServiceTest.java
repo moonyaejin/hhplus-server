@@ -57,7 +57,7 @@ class ConcertRankingServiceTest {
     @DisplayName("100명 동시 예약 → 정확히 100개 집계 (동시성 검증)")
     void concurrentReservationsShouldBeCountedAccurately() throws InterruptedException {
         // Given
-        Long scheduleId = 1L;
+        Long scheduleId = System.currentTimeMillis();
         int threadCount = 100;
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(threadCount);
@@ -96,7 +96,8 @@ class ConcertRankingServiceTest {
     @DisplayName("99석 vs 100석 - 매진 상태 정확히 반영")
     void shouldReflectSoldOutStatusAccurately() throws InterruptedException {
         // Given
-        Long scheduleId = 2L;
+        Long scheduleId = System.currentTimeMillis();
+
 
         // When - 99석 판매
         for (int i = 0; i < 99; i++) {
@@ -138,7 +139,7 @@ class ConcertRankingServiceTest {
     @DisplayName("매진 후 추가 예약 시도 → 집계 차단")
     void soldOutConcertShouldBlockAdditionalReservations() {
         // Given - 100석 매진
-        Long scheduleId = 3L;
+        Long scheduleId = System.currentTimeMillis();
         for (int i = 0; i < 100; i++) {
             rankingService.trackReservation(scheduleId, 1);
         }
@@ -163,9 +164,9 @@ class ConcertRankingServiceTest {
     @DisplayName("여러 공연 동시 판매 → 판매 속도 순 랭킹")
     void multipleConcertsShouldBeRankedByVelocity() throws InterruptedException {
         // Given - 3개 공연
-        Long schedule1 = 101L; // 50석
-        Long schedule2 = 102L; // 30석
-        Long schedule3 = 103L; // 10석
+        Long schedule1 = System.currentTimeMillis();
+        Long schedule2 = System.currentTimeMillis() + 1;
+        Long schedule3 = System.currentTimeMillis() + 2;
 
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(90);
@@ -213,7 +214,7 @@ class ConcertRankingServiceTest {
     @DisplayName("매진 캐시 성능 - 100회 호출 1초 이내")
     void soldOutCachePerformance() {
         // Given - 매진 상태
-        Long scheduleId = 4L;
+        Long scheduleId = System.currentTimeMillis();
         for (int i = 0; i < 100; i++) {
             rankingService.trackReservation(scheduleId, 1);
         }

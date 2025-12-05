@@ -1,7 +1,6 @@
 package kr.hhplus.be.server.application.service;
 
 import kr.hhplus.be.server.application.event.ReservationCancelledEvent;
-import kr.hhplus.be.server.application.event.ReservationConfirmedEvent;
 import kr.hhplus.be.server.application.port.in.ReservationUseCase;
 import kr.hhplus.be.server.application.port.in.PaymentUseCase;
 import kr.hhplus.be.server.application.port.out.*;
@@ -12,6 +11,8 @@ import kr.hhplus.be.server.domain.concert.ConcertSchedule;
 import kr.hhplus.be.server.domain.concert.ConcertScheduleId;
 import kr.hhplus.be.server.domain.queue.QueueTokenNotActiveException;
 import kr.hhplus.be.server.domain.reservation.*;
+import kr.hhplus.be.server.infrastructure.kafka.message.PaymentRequestMessage;
+import kr.hhplus.be.server.infrastructure.kafka.producer.PaymentKafkaProducer;
 import kr.hhplus.be.server.infrastructure.redis.lock.RedisDistributedLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,13 +30,19 @@ import java.util.Optional;
 /**
  * 예약 애플리케이션 서비스
  *
- * [분산락 적용 ]
+ * [분산락 적용]
  * 1. temporaryAssign: 좌석별 락 (동시 예약 방지)
  * 2. confirmReservation: 예약ID별 락 (중복 확정/결제 방지)
  *
  * [관심사 분리]
- * - 핵심 로직: 결제, 예약확정, 좌석해제, 토큰만료
+ * - 핵심 로직: 예약확정(상태변경), 좌석해제, 토큰만료
+ * - 결제 처리: Kafka를 통한 비동기 처리
  * - 부가 로직: 랭킹 업데이트, 데이터 플랫폼 전송 (이벤트로 분리)
+ *
+ * [결제 비동기화]
+ * - 기존: paymentUseCase.pay() 동기 호출 (2~3초 블로킹)
+ * - 변경: Kafka로 결제 요청 발행 (즉시 응답)
+ * - 상태: TEMPORARY_ASSIGNED → PAYMENT_PENDING → CONFIRMED/PAYMENT_FAILED
  */
 @Slf4j
 @Service
@@ -44,13 +51,14 @@ public class ReservationService implements ReservationUseCase {
 
     private final ReservationRepository reservationRepository;
     private final QueuePort queuePort;
-    private final PaymentUseCase paymentUseCase;
+    private final PaymentUseCase paymentUseCase;  // 환불에만 사용
     private final ConcertSchedulePort concertSchedulePort;
     private final ReservationDomainService domainService;
     private final SeatHoldPort seatHoldPort;
     private final RedisDistributedLock distributedLock;
     private final TransactionTemplate transactionTemplate;
     private final ApplicationEventPublisher eventPublisher;
+    private final PaymentKafkaProducer paymentKafkaProducer;  // 결제 비동기 발행
 
     /**
      * 좌석 임시 배정
@@ -82,9 +90,9 @@ public class ReservationService implements ReservationUseCase {
 
         return distributedLock.executeWithLock(
                 lockKey,
-                10L,        // TTL: 10초 (충분한 여유)
-                3,          // 최대 3번 재시도
-                100L,       // 100ms 대기 후 재시도
+                10L,
+                3,
+                100L,
                 () -> transactionTemplate.execute(status ->
                         executeTemporaryAssign(seatIdentifier, userId)
                 )
@@ -139,10 +147,14 @@ public class ReservationService implements ReservationUseCase {
     }
 
     /**
-     * 예약 확정
+     * 예약 확정 (비동기 결제)
+     *
+     * [변경사항]
+     * - 기존: paymentUseCase.pay() 동기 호출 → 결제 완료 후 응답
+     * - 변경: Kafka로 결제 요청 발행 → 즉시 응답 (PAYMENT_PENDING)
+     *
      * - 분산락: lock:reservation:confirm:{reservationId}
-     * - 범위: 예약 조회 ~ 결제 ~ 확정 ~ Redis/Queue 정리
-     * - 중요: 중복 결제 방지
+     * - 범위: 예약 조회 ~ 상태 변경 ~ Kafka 발행
      */
     @Override
     public ConfirmReservationResult confirmReservation(ConfirmReservationCommand command) {
@@ -156,12 +168,61 @@ public class ReservationService implements ReservationUseCase {
 
         return distributedLock.executeWithLock(
                 lockKey,
-                10L,        // TTL: 10초
-                3,          // 최대 3번 재시도
-                100L,       // 100ms 대기 후 재시도
+                10L,
+                3,
+                100L,
                 () -> transactionTemplate.execute(status ->
-                        executeConfirmReservation(command, userId)
+                        executeConfirmReservationAsync(command, userId)
                 )
+        );
+    }
+
+    /**
+     * 예약 확정 실제 로직 (비동기 결제)
+     *
+     * 흐름:
+     * 1. 예약 조회 및 검증
+     * 2. 상태 변경: TEMPORARY_ASSIGNED → PAYMENT_PENDING
+     * 3. Kafka로 결제 요청 발행
+     * 4. 즉시 응답 반환 (결제 완료 전)
+     *
+     * 결제 결과는 PaymentResultConsumer에서 처리:
+     * - 성공: PAYMENT_PENDING → CONFIRMED
+     * - 실패: PAYMENT_PENDING → PAYMENT_FAILED
+     */
+    private ConfirmReservationResult executeConfirmReservationAsync(
+            ConfirmReservationCommand command, UserId userId) {
+
+        // 1. 예약 조회 및 권한 검증
+        Reservation reservation = findAndValidateReservation(command.reservationId(), userId);
+
+        // 3. 상태 변경: TEMPORARY_ASSIGNED → PAYMENT_PENDING
+        reservation.startPayment();
+        reservationRepository.save(reservation);
+
+        // 4. Kafka로 결제 요청 발행
+        PaymentRequestMessage paymentRequest = PaymentRequestMessage.of(
+                reservation.getId().value(),
+                userId.asString(),
+                reservation.getPrice().amount(),
+                command.idempotencyKey(),
+                reservation.getSeatIdentifier().scheduleId().value(),
+                reservation.getSeatIdentifier().seatNumber().value()
+        );
+        paymentKafkaProducer.sendPaymentRequest(paymentRequest);
+
+        log.info("결제 요청 발행 완료 - reservationId: {}, status: PAYMENT_PENDING",
+                reservation.getId().value());
+
+        // 5. 대기열 토큰 만료 (결제 요청이 발행되면 토큰은 더 이상 필요 없음)
+        queuePort.expire(command.queueToken());
+
+        // 6. 즉시 응답 반환 (결제 완료 전)
+        return new ConfirmReservationResult(
+                reservation.getId().value(),
+                null,
+                null,
+                "PAYMENT_PENDING"
         );
     }
 
@@ -182,9 +243,9 @@ public class ReservationService implements ReservationUseCase {
 
         return distributedLock.executeWithLock(
                 lockKey,
-                10L,        // TTL: 10초
-                3,          // 최대 3번 재시도
-                100L,       // 100ms 대기 후 재시도
+                10L,
+                3,
+                100L,
                 () -> transactionTemplate.execute(status ->
                         executeCancelReservation(command, userId)
                 )
@@ -206,7 +267,7 @@ public class ReservationService implements ReservationUseCase {
                     "확정된 예약만 취소할 수 있습니다. 현재 상태: " + reservation.getStatus());
         }
 
-        // 3. 환불 처리
+        // 3. 환불 처리 (동기 - 취소는 빈도가 낮으므로 동기 유지)
         PaymentUseCase.RefundCommand refundCommand = new PaymentUseCase.RefundCommand(
                 userId.asString(),
                 reservation.getPrice().amount(),
@@ -217,12 +278,10 @@ public class ReservationService implements ReservationUseCase {
 
         // 4. 예약 상태 변경 → CANCELLED
         LocalDateTime cancelledAt = LocalDateTime.now();
-        reservation.cancel(cancelledAt);  // 도메인 메서드 (아래에서 추가 필요)
+        reservation.cancel(cancelledAt);
         reservationRepository.save(reservation);
 
         // 5. 예약 취소 이벤트 발행
-        //    - 랭킹 차감
-        //    - 데이터 플랫폼 전송
         eventPublisher.publishEvent(
                 ReservationCancelledEvent.of(
                         reservation.getId().value(),
@@ -241,62 +300,6 @@ public class ReservationService implements ReservationUseCase {
                 cancelledAt
         );
     }
-
-    /**
-     * 예약 확정 실제 로직
-     */
-    private ConfirmReservationResult executeConfirmReservation(
-            ConfirmReservationCommand command, UserId userId) {
-
-        // 1. 예약 조회 및 권한 검증
-        Reservation reservation = findAndValidateReservation(command.reservationId(), userId);
-
-        // 2. 도메인 서비스를 통한 확정 가능 여부 검증
-        domainService.validateConfirmation(reservation, LocalDateTime.now());
-
-        // 3. PaymentUseCase를 통한 결제 처리
-        PaymentUseCase.PaymentCommand paymentCommand = new PaymentUseCase.PaymentCommand(
-                userId.asString(),
-                reservation.getPrice().amount(),
-                command.idempotencyKey()
-        );
-
-        PaymentUseCase.BalanceResult paymentResult = paymentUseCase.pay(paymentCommand);
-
-        // 4. 예약 확정
-        LocalDateTime confirmedAt = LocalDateTime.now();
-        reservation.confirm(confirmedAt);
-        reservationRepository.save(reservation);
-
-        // 5. Redis에서 좌석 점유 해제
-        seatHoldPort.release(reservation.getSeatIdentifier());
-
-        // 6. 대기열 토큰 만료
-        queuePort.expire(command.queueToken());
-
-        // 7. 예약 확정 완료 이벤트 발행
-        //    - 랭킹 업데이트
-        //    - 데이터 플랫폼 전송
-        eventPublisher.publishEvent(
-                ReservationConfirmedEvent.of(
-                        reservation.getId().value(),
-                        reservation.getUserId().asString(),
-                        reservation.getSeatIdentifier().scheduleId().value(),
-                        reservation.getSeatIdentifier().seatNumber().value(),
-                        reservation.getPrice().amount(),
-                        confirmedAt
-                )
-        );
-        log.info("예약 확정 이벤트 발행 완료 - reservationId: {}", reservation.getId().value());
-
-        // ConfirmReservationResult 객체 생성하여 반환
-        return new ConfirmReservationResult(
-                reservation.getId().value(),
-                paymentResult.balance(),
-                confirmedAt
-        );
-    }
-
 
     /**
      * 예약 조회
