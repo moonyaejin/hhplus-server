@@ -4,6 +4,6 @@ import java.time.LocalDateTime;
 
 public record ConfirmReservationResponse(
         String reservationId,
-        long remainingBalance,
+        Long remainingBalance,
         LocalDateTime confirmedAt
 ) {}
