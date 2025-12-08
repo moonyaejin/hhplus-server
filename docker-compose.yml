@@ -156,6 +156,35 @@ services:
       - kafka-2
       - kafka-3
 
+  # ============================================
+  # Application (부하 테스트용)
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: src/test/java/kr/hhplus/be/server/load-test/Dockerfile.app
+    container_name: concert-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: local-test
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/hhplus?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29093,kafka-3:29094
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
 networks:
   default:
     driver: bridge
