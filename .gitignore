@@ -39,3 +39,8 @@ out/
 data
 
 /.env
+
+# JMeter
+jmeter.log
+*.jtl
+*-report/
