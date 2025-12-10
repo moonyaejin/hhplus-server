@@ -43,4 +43,9 @@ data
 # JMeter
 jmeter.log
 *.jtl
-*-report/
+*-report/*.log
+*-log.txt
+curl-format.txt
+*.log
+*-log.txt
+curl-format.txt
