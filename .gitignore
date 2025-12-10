@@ -39,3 +39,13 @@ out/
 data
 
 /.env
+
+# JMeter
+jmeter.log
+*.jtl
+*-report/*.log
+*-log.txt
+curl-format.txt
+*.log
+*-log.txt
+curl-format.txt
